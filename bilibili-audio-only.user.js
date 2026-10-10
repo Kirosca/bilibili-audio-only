@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.0
-// @description  一键切换纯音频省流模式，全新上线【小宇宙】现代播客大卡片播放风格（16:9原比例大圆角高质感封面彻底消除标题裁剪、弥散流光环境光影、专属±15s长音频快进快退、UP主信息联动），支持与网易云黑胶留声机双主题一键无缝切换并记忆，彻底修复单页应用（SPA）切换视频与新打开视频时因切页时序倒置、历史断点身份错位及原视频残留时间戳导致新视频进度条瞬移至结尾的严重BUG，建立视频断点强绑定校验、播放尾声自动归零与防溢出越界保护机制，重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.4.1
+// @description  一键切换纯音频省流模式，全新上线【小宇宙】现代播客大卡片播放风格（16:9原比例大圆角高质感封面彻底消除标题裁剪、弥散流光环境光影、专属±15s长音频快进快退、UP主信息联动），支持与网易云黑胶留声机双主题一键无缝切换并记忆，构建双主题互斥隔离体系（彻底修复播客卡片开启时黑胶唱盘因响应式计算覆盖未隐藏重叠显示的BUG），彻底修复单页应用（SPA）切换视频与新打开视频时因切页时序倒置、历史断点身份错位及原视频残留时间戳导致新视频进度条瞬移至结尾的严重BUG，建立视频断点强绑定校验、播放尾声自动归零与防溢出越界保护机制，重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1065,6 +1065,11 @@
         const style = getPanelThemeStyle();
         const isPodcast = style === 'podcast';
 
+        const panelCard = audioPanelEl.querySelector('#bili-audio-card');
+        if (panelCard) {
+            panelCard.setAttribute('data-style', isPodcast ? 'podcast' : 'vinyl');
+        }
+
         const podcastWrap = audioPanelEl.querySelector('#bili-podcast-wrap');
         const vinylWrap = audioPanelEl.querySelector('#bili-vinyl-wrap');
         const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
@@ -2119,11 +2124,16 @@
     let panelResizeObserver = null;
     function updateAudioCardResponsiveSize() {
         if (!audioPanelEl) return;
-        // 尺寸解耦：无论视口当前是否处于未回流的 0 宽高，首要任务立即执行正圆防御
-        enforceVinylCircleDefense();
+        const isPodcast = getPanelThemeStyle() === 'podcast';
+        // 尺寸解耦：仅在黑胶模式下执行正圆防御，避免干扰播客卡片
+        if (!isPodcast) {
+            enforceVinylCircleDefense();
+        }
 
         const panelCard = audioPanelEl.querySelector('#bili-audio-card');
         if (!panelCard) return;
+
+        panelCard.setAttribute('data-style', isPodcast ? 'podcast' : 'vinyl');
 
         // 获取视频窗口父容器有效视口宽度与高度
         const rect = audioPanelEl.getBoundingClientRect();
@@ -2179,17 +2189,18 @@
 
         const titleEl = panelCard.querySelector('#bili-vinyl-title');
         if (titleEl) {
+            titleEl.style.display = isPodcast ? 'none' : 'block';
             titleEl.style.fontSize = titleFontSize;
             titleEl.style.marginBottom = isCompactHeight ? '2px' : '4px';
         }
 
         const vinylWrap = panelCard.querySelector('#bili-vinyl-wrap');
         if (vinylWrap) {
+            vinylWrap.style.display = isPodcast ? 'none' : 'flex';
             vinylWrap.style.width = `${wrapW}px`;
             vinylWrap.style.height = `${wrapH}px`;
             vinylWrap.style.minHeight = `${wrapH}px`;
             vinylWrap.style.flex = 'none';
-            vinylWrap.style.display = 'flex';
             vinylWrap.style.alignItems = 'center';
             vinylWrap.style.justifyContent = 'center';
             vinylWrap.style.margin = isCompactHeight ? '2px 0 6px 0' : '4px 0 10px 0';
@@ -2232,6 +2243,9 @@
         const podcastWrap = panelCard.querySelector('#bili-podcast-wrap');
         const podcastArtwork = panelCard.querySelector('#bili-podcast-artwork');
         const podcastGlow = panelCard.querySelector('#bili-podcast-ambient-glow');
+        if (podcastWrap) {
+            podcastWrap.style.display = isPodcast ? 'flex' : 'none';
+        }
         if (podcastWrap && podcastArtwork) {
             const maxPodcastWByWidth = Math.round(targetCardW * 0.62);
             const maxPodcastWByHeight = Math.round(Math.max(80, h * 0.76 - reservedControlsH) * (16 / 9));
@@ -2262,6 +2276,7 @@
 
         // 播客专属 ±15s 快退快进按钮尺寸
         panelCard.querySelectorAll('#bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
+            btn.style.display = isPodcast ? 'inline-flex' : 'none';
             const btnD = isCompactHeight ? '30px' : (isSpaciousHeight ? '36px' : '34px');
             btn.style.width = btnD;
             btn.style.height = btnD;
@@ -2680,6 +2695,30 @@
                     opacity: 1 !important;
                     background: rgba(127,127,127,0.18) !important;
                 }
+                /* 双主题互斥展示强保障（避免外部样式或尺寸计算覆盖导致黑胶/播客重叠显示） */
+                #bili-audio-card[data-style="podcast"] #bili-vinyl-wrap,
+                #bili-audio-card[data-style="podcast"] #bili-vinyl-title {
+                    display: none !important;
+                }
+                #bili-audio-card[data-style="podcast"] #bili-podcast-wrap {
+                    display: flex !important;
+                }
+                #bili-audio-card[data-style="podcast"] #bili-btn-backward-15,
+                #bili-audio-card[data-style="podcast"] #bili-btn-forward-15 {
+                    display: inline-flex !important;
+                }
+
+                #bili-audio-card[data-style="vinyl"] #bili-podcast-wrap,
+                #bili-audio-card[data-style="vinyl"] #bili-btn-backward-15,
+                #bili-audio-card[data-style="vinyl"] #bili-btn-forward-15 {
+                    display: none !important;
+                }
+                #bili-audio-card[data-style="vinyl"] #bili-vinyl-wrap {
+                    display: flex !important;
+                }
+                #bili-audio-card[data-style="vinyl"] #bili-vinyl-title {
+                    display: block !important;
+                }
             `;
             (document.head || document.documentElement).appendChild(panelStyle);
         } else {
@@ -2717,7 +2756,7 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
+            <div id="bili-audio-card" data-style="${getPanelThemeStyle()}" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
                 <!-- 纯音频/播客模式小标识 -->
                 <div id="bili-audio-mode-badge" style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
                     <span style="display: inline-flex; align-items: center;">${ICONS.PODCAST}播客模式</span>
