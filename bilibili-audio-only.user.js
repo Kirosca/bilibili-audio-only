@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.1
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.2
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1671,8 +1671,9 @@
         }
 
         if (settingsBox) {
-            settingsBox.style.background = isDark ? '#131416' : '#f6f7f8';
-            settingsBox.style.borderColor = isDark ? 'rgba(255,255,255,0.08)' : '#e3e5e7';
+            settingsBox.style.background = 'transparent';
+            settingsBox.style.border = 'none';
+            settingsBox.style.color = isDark ? '#9499a0' : '#61666d';
         }
 
         if (playPauseBtn && customAudioEl) {
@@ -2109,7 +2110,7 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 14px 22px; max-width: 580px; width: 92%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s;">
+            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; max-width: 580px; width: 92%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
                 <!-- 纯音频模式小标识 -->
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
                     <span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频模式</span>
@@ -2123,7 +2124,7 @@
                 </div>
 
                 <!-- 网易云黑胶唱片与留声机唱针交互区 -->
-                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 210px; display: flex; align-items: center; justify-content: center; margin: 4px 0 14px 0; user-select: none;">
+                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
                     <!-- 仿真留声机唱针 -->
                     <div id="bili-vinyl-needle-wrap" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: rotate(-28deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
                         <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2148,35 +2149,11 @@
                     </div>
                 </div>
 
-                <!-- 全局设置与单视频独立记忆管理区域 -->
-                <div id="bili-audio-settings-box" style="width: 100%; border: 1px solid; border-radius: 6px; padding: 7px 12px; margin-bottom: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; transition: all 0.2s;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="bili-setting-default-switch" style="cursor: pointer; width: 14px; height: 14px; accent-color: #00aeec;">
-                            <span style="font-weight: 500;">新视频默认开启听视频</span>
-                        </label>
-                        <div id="bili-memory-status-text" style="font-size: 11px;"></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; border-top: 1px dashed rgba(127,127,127,0.18); padding-top: 5px;">
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="bili-setting-loop-switch" style="cursor: pointer; width: 14px; height: 14px; accent-color: #00aeec;">
-                            <span style="display: inline-flex; align-items: center; font-weight: 500;">${ICONS.REPEAT_ONE}单曲循环播放（与B站单集循环联动）</span>
-                        </label>
-                        <span style="font-size: 11px; opacity: 0.65;">自动重播本集</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; opacity: 0.65; border-top: 1px dashed rgba(127,127,127,0.2); padding-top: 5px;">
-                        <span>判定：优先独立记忆（上限 500），无记忆按默认设置</span>
-                        <button id="bili-btn-reset-memory" style="background: none; border: none; color: #00aeec; cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; display: inline-flex; align-items: center;">
-                            ${ICONS.TRASH}清除本视频记忆
-                        </button>
-                    </div>
-                </div>
-
                 <!-- 底层原生音频驱动节点（隐藏 controls，由自定义 UI 精确驱动） -->
                 <audio id="bili-native-audio" style="display: none;"></audio>
 
                 <!-- 自定义纯音频控制器（进度条已播段与音量0~当前大小填充段均采用B站官方主题蓝 #00aeec） -->
-                <div id="bili-audio-control-bar" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; box-sizing: border-box; user-select: none;">
+                <div id="bili-audio-control-bar" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; box-sizing: border-box; user-select: none;">
                     <!-- 播放进度条区域 -->
                     <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                         <span id="bili-audio-time-current" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.8; min-width: 42px; text-align: right;">00:00</span>
@@ -2215,7 +2192,7 @@
                 </div>
 
                 <!-- 音质与倍速并排控制区 -->
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
                     <div id="bili-audio-quality-section" style="display: flex; gap: 6px; align-items: center; font-size: 12px;">
                         <span style="opacity: 0.8; font-weight: 500;">音质：</span>
                         <div id="bili-audio-quality-list" style="display: flex; gap: 4px; flex-wrap: wrap;"></div>
@@ -2230,14 +2207,35 @@
                     </div>
                 </div>
 
-                <!-- 控制操作区：播放/暂停与恢复视频并列 -->
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <button id="bili-btn-play-pause" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
-                        ${ICONS.PAUSE}暂停音频
-                    </button>
-                    <button id="bili-btn-restore" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
-                        ${ICONS.SCREEN}恢复看视频
-                    </button>
+                <!-- 底部操作区（居中主控按钮 + 右下角微型开关组） -->
+                <div style="width: 100%; display: flex; justify-content: center; align-items: center; position: relative; margin-top: 2px;">
+                    <!-- 居中播放/暂停与恢复视频 -->
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button id="bili-btn-play-pause" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
+                            ${ICONS.PAUSE}暂停音频
+                        </button>
+                        <button id="bili-btn-restore" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
+                            ${ICONS.SCREEN}恢复看视频
+                        </button>
+                    </div>
+
+                    <!-- 右下角紧凑小开关区（替代原横置大框，大幅释放纵向高度） -->
+                    <div id="bili-audio-settings-box" style="position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; opacity: 0.85; user-select: none;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="新视频默认开启听视频">
+                                <input type="checkbox" id="bili-setting-default-switch" style="cursor: pointer; width: 12px; height: 12px; accent-color: #00aeec; margin: 0;">
+                                <span>默认开启</span>
+                            </label>
+                            <label style="display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="单曲循环播放（与B站单集循环联动）">
+                                <input type="checkbox" id="bili-setting-loop-switch" style="cursor: pointer; width: 12px; height: 12px; accent-color: #00aeec; margin: 0;">
+                                <span>单曲循环</span>
+                            </label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 10px;">
+                            <div id="bili-memory-status-text"></div>
+                            <button id="bili-btn-reset-memory" style="background: none; border: none; color: #00aeec; cursor: pointer; padding: 0; font-size: 10px; text-decoration: underline;" title="清除本视频独立记忆">清除记忆</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
