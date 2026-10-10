@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.0
+// @version      2.0.1
 // @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
@@ -1648,6 +1648,7 @@
         if (!audioPanelEl) return;
         const isDark = isBiliDarkMode();
 
+        const panelCard = audioPanelEl.querySelector('#bili-audio-card');
         const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
         const settingsBox = audioPanelEl.querySelector('#bili-audio-settings-box');
         const playPauseBtn = audioPanelEl.querySelector('#bili-btn-play-pause');
@@ -2442,8 +2443,16 @@
         toggleBtnEl.setAttribute('aria-label', '听视频');
         toggleBtnEl.setAttribute('tabindex', '0');
 
-        toggleBtnEl.innerHTML = `<div class="bpx-player-ctrl-playbackrate-result" id="bili-audio-btn-text">听视频</div>`;
-        toggleBtnEl.onclick = () => setAudioMode(!isAudioMode, true);
+        toggleBtnEl.innerHTML = `<div class="bpx-player-ctrl-playbackrate-result" id="bili-audio-btn-text" style="cursor: pointer; user-select: none;">听视频</div>`;
+        const onToggleClick = (e) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            setAudioMode(!isAudioMode, true);
+        };
+        toggleBtnEl.onclick = onToggleClick;
+        toggleBtnEl.addEventListener('click', onToggleClick, true);
 
         // 精确插入在清晰度按钮前，与清晰度、倍速紧挨排列，彻底脱离扩展插件容器
         const qualityBtn = controlRight.querySelector('.bpx-player-ctrl-quality');
@@ -2651,6 +2660,18 @@
             childList: true,
             subtree: true
         });
+
+        mountToggleButton();
+
+        // 全局捕获委托监听底栏按钮点击（双重防护，防止冒泡阻断或 DOM 替换丢监听）
+        document.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest && e.target.closest('#bili-audio-ctrl-btn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                setAudioMode(!isAudioMode, true);
+            }
+        }, true);
     }
 
     if (document.readyState === 'loading') {
