@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.2.1
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.2.2
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1860,10 +1860,66 @@
         }
     }
 
+    // 核心正圆防御守卫：独立于尺寸计算，强制为唱盘、封面和轴孔施加最高优先级圆角与裁剪防御
+    function enforceVinylCircleDefense() {
+        if (!audioPanelEl) return;
+        const targets = [
+            audioPanelEl.querySelector('#bili-vinyl-disc'),
+            audioPanelEl.querySelector('#bili-vinyl-cover'),
+            audioPanelEl.querySelector('#bili-vinyl-center-hole')
+        ];
+        targets.forEach(el => {
+            if (!el) return;
+            el.style.setProperty('border-radius', '50%', 'important');
+            el.style.setProperty('-webkit-border-radius', '50%', 'important');
+            el.style.setProperty('clip-path', 'circle(50% at 50% 50%)', 'important');
+            el.style.setProperty('-webkit-clip-path', 'circle(50% at 50% 50%)', 'important');
+            el.style.setProperty('overflow', 'hidden', 'important');
+        });
+
+        // 确保样式表在 head 最末位，杜绝第三方插件后插样式表以同等 !important 权重压制
+        const panelStyle = document.getElementById('bili-audio-panel-style');
+        if (panelStyle && panelStyle.parentElement && panelStyle !== panelStyle.parentElement.lastElementChild) {
+            panelStyle.parentElement.appendChild(panelStyle);
+        }
+    }
+
+    // 针对黑胶唱盘与内圈封面的 DOM 属性主动防御观察器：外部插件若敢修改 style/class，瞬间自动打回正圆
+    let vinylDefenseObserver = null;
+    function setupVinylDefenseObserver() {
+        if (!audioPanelEl) return;
+        if (vinylDefenseObserver) {
+            vinylDefenseObserver.disconnect();
+            vinylDefenseObserver = null;
+        }
+
+        const targets = [
+            audioPanelEl.querySelector('#bili-vinyl-disc'),
+            audioPanelEl.querySelector('#bili-vinyl-cover'),
+            audioPanelEl.querySelector('#bili-vinyl-center-hole')
+        ].filter(Boolean);
+
+        if (targets.length === 0) return;
+
+        vinylDefenseObserver = new MutationObserver(() => {
+            enforceVinylCircleDefense();
+        });
+
+        targets.forEach(el => {
+            vinylDefenseObserver.observe(el, {
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        });
+    }
+
     // 12. 根据父元素视口动态自适应卡片与黑胶唱盘尺寸（对齐视频窗口 0.7 比例，沉浸饱满呈现）
     let panelResizeObserver = null;
     function updateAudioCardResponsiveSize() {
         if (!audioPanelEl) return;
+        // 尺寸解耦：无论视口当前是否处于未回流的 0 宽高，首要任务立即执行正圆防御
+        enforceVinylCircleDefense();
+
         const panelCard = audioPanelEl.querySelector('#bili-audio-card');
         if (!panelCard) return;
 
@@ -2310,13 +2366,16 @@
             updateCustomPlayerUI();
             setupPanelResizeObserver();
             updateAudioCardResponsiveSize();
+            setupVinylDefenseObserver();
+            enforceVinylCircleDefense();
             return;
         }
 
-        if (!document.getElementById('bili-audio-panel-style')) {
-            const styleEl = document.createElement('style');
-            styleEl.id = 'bili-audio-panel-style';
-            styleEl.textContent = `
+        let panelStyle = document.getElementById('bili-audio-panel-style');
+        if (!panelStyle) {
+            panelStyle = document.createElement('style');
+            panelStyle.id = 'bili-audio-panel-style';
+            panelStyle.textContent = `
                 #bili-audio-theme-panel::-webkit-scrollbar {
                     display: none !important;
                     width: 0 !important;
@@ -2327,6 +2386,10 @@
                     box-sizing: border-box;
                     transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
                 }
+                html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-disc,
+                html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-disc.bili-vinyl-disc,
+                html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-cover,
+                html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-center-hole,
                 #bili-vinyl-disc,
                 #bili-vinyl-disc.bili-vinyl-disc,
                 #bili-vinyl-cover,
@@ -2371,7 +2434,11 @@
                     filter: brightness(1.06);
                 }
             `;
-            document.head.appendChild(styleEl);
+            (document.head || document.documentElement).appendChild(panelStyle);
+        } else {
+            if (panelStyle.parentElement && panelStyle !== panelStyle.parentElement.lastElementChild) {
+                panelStyle.parentElement.appendChild(panelStyle);
+            }
         }
 
         audioPanelEl = document.createElement('div');
@@ -2723,6 +2790,8 @@
         updateVinylMeta();
         setupPanelResizeObserver();
         updateAudioCardResponsiveSize();
+        setupVinylDefenseObserver();
+        enforceVinylCircleDefense();
     }
 
     // 14. 挂载按钮至播放器底部控制栏（完全采用原生倍速/清晰度相同结构，无缝融入底栏，无悬停菜单）
@@ -2879,9 +2948,13 @@
             }
             updateMemoryStatusDisplay();
             updateVinylMeta();
-            // 延时重试梯队：适应 B 站单页应用（SPA）异步渲染标题与海报的时间差
+            enforceVinylCircleDefense();
+            // 延时重试梯队：适应 B 站单页应用（SPA）异步渲染标题与海报的时间差，并保障黑胶圆角防御即时生效
             [80, 250, 600, 1200, 2500].forEach(delay => {
-                setTimeout(updateVinylMeta, delay);
+                setTimeout(() => {
+                    updateVinylMeta();
+                    enforceVinylCircleDefense();
+                }, delay);
             });
         };
 
