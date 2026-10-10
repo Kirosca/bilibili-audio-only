@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.2
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.3
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -2199,6 +2199,7 @@
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center; font-size: 12px;">
                         <span style="opacity: 0.8; font-weight: 500;">倍速：</span>
+                        <button class="bili-rate-btn" data-rate="0.5" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">0.5</button>
                         <button class="bili-rate-btn" data-rate="0.75" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">0.75</button>
                         <button class="bili-rate-btn active" data-rate="1.0" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">1.0</button>
                         <button class="bili-rate-btn" data-rate="1.25" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">1.25</button>
