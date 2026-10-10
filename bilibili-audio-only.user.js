@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.2
-// @description  一键切换纯音频省流量模式，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.3
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -43,7 +43,9 @@
         REPEAT_ONE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 9.5l1.5-1v7.5" stroke-width="2.2"/></svg>`,
         PIN: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 3px;"><path transform="rotate(45 12 12)" d="M16 3a1 1 0 0 1 1 1v1.5a1 1 0 0 1-.3.7L15 8v3l2.7 2.7a1 1 0 0 1 .3.7V16a1 1 0 0 1-1 1h-4v6a1 1 0 0 1-2 0v-6H7a1 1 0 0 1-1-1v-1.6a1 1 0 0 1 .3-.7L9 11V8l-1.7-1.8a1 1 0 0 1-.3-.7V4a1 1 0 0 1 1-1h8z"/></svg>`,
         GLOBE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
-        TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 3px;"><path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 0 1 0 2h-1.07l-1.2 13.17A3 3 0 0 1 13.75 22H10.25a3 3 0 0 1-2.98-2.83L6.07 6H5a1 1 0 0 1 0-2h5V3zm2 1h2V3h-2v1zm-2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1z"/></svg>`
+        TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 3px;"><path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 0 1 0 2h-1.07l-1.2 13.17A3 3 0 0 1 13.75 22H10.25a3 3 0 0 1-2.98-2.83L6.07 6H5a1 1 0 0 1 0-2h5V3zm2 1h2V3h-2v1zm-2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1z"/></svg>`,
+        VOLUME_HIGH: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
+        VOLUME_MUTE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`
     };
 
     // 音量与静音记忆系统及双向防暴音同步控制
@@ -1096,11 +1098,24 @@
         return v;
     }
 
-    // 7. 格式化流量大小
+    // 7. 格式化流量大小与媒体时间
     function formatBytes(bytes) {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function formatMediaTime(seconds) {
+        if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+        const s = Math.floor(seconds);
+        const sec = s % 60;
+        const min = Math.floor(s / 60) % 60;
+        const hr = Math.floor(s / 3600);
+        const pad = (n) => String(n).padStart(2, '0');
+        if (hr > 0) {
+            return `${pad(hr)}:${pad(min)}:${pad(sec)}`;
+        }
+        return `${pad(min)}:${pad(sec)}`;
     }
 
     // 8. 更新流量对比与节省数据显示
@@ -1384,9 +1399,15 @@
             restoreBtn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0';
         }
 
-        if (audioEl) {
-            audioEl.style.filter = isDark ? 'invert(0.9) hue-rotate(180deg)' : 'none';
+        const progressTrack = audioPanelEl.querySelector('#bili-audio-progress-track');
+        if (progressTrack) {
+            progressTrack.style.background = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)';
         }
+        const volumeTrack = audioPanelEl.querySelector('#bili-audio-volume-track');
+        if (volumeTrack) {
+            volumeTrack.style.background = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)';
+        }
+        updateCustomPlayerUI();
 
         audioPanelEl.querySelectorAll('.bili-rate-btn').forEach(btn => {
             const isActive = btn.classList.contains('active');
@@ -1470,6 +1491,184 @@
         return null;
     }
 
+    let isDraggingProgress = false;
+    let isDraggingVolume = false;
+
+    // 实时同步更新自定义音频控制器的进度条与音量条 UI（已播段与音量段均采用 B 站主题蓝 #00aeec）
+    function updateCustomPlayerUI() {
+        if (!audioPanelEl || !customAudioEl) return;
+
+        const timeCurrentEl = audioPanelEl.querySelector('#bili-audio-time-current');
+        const timeTotalEl = audioPanelEl.querySelector('#bili-audio-time-total');
+        const progressBarEl = audioPanelEl.querySelector('#bili-audio-progress-bar');
+        const progressThumbEl = audioPanelEl.querySelector('#bili-audio-progress-thumb');
+
+        if (!isDraggingProgress && progressBarEl && progressThumbEl) {
+            const cur = customAudioEl.currentTime || 0;
+            const dur = customAudioEl.duration || 0;
+            const pct = dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
+            progressBarEl.style.width = pct + '%';
+            progressThumbEl.style.left = pct + '%';
+            if (timeCurrentEl) timeCurrentEl.textContent = formatMediaTime(cur);
+            if (timeTotalEl) timeTotalEl.textContent = formatMediaTime(dur);
+        }
+
+        const volumeBarEl = audioPanelEl.querySelector('#bili-audio-volume-bar');
+        const volumeThumbEl = audioPanelEl.querySelector('#bili-audio-volume-thumb');
+        const volumeTextEl = audioPanelEl.querySelector('#bili-audio-volume-text');
+        const volumeBtnEl = audioPanelEl.querySelector('#bili-audio-volume-btn');
+
+        if (!isDraggingVolume && volumeBarEl && volumeThumbEl) {
+            const isMuted = customAudioEl.muted;
+            const vol = isMuted ? 0 : (typeof customAudioEl.volume === 'number' ? customAudioEl.volume : 1);
+            const pct = Math.round(vol * 100);
+            volumeBarEl.style.width = pct + '%';
+            volumeThumbEl.style.left = pct + '%';
+            if (volumeTextEl) volumeTextEl.textContent = pct + '%';
+            if (volumeBtnEl) {
+                volumeBtnEl.innerHTML = (isMuted || vol === 0) ? ICONS.VOLUME_MUTE : ICONS.VOLUME_HIGH;
+            }
+        }
+    }
+
+    // 绑定自定义音频播放控制器（进度跳转、拖拽寻道、音量调节与静音切换）
+    function bindCustomPlayerControls() {
+        if (!audioPanelEl || !customAudioEl) return;
+
+        const progressWrap = audioPanelEl.querySelector('#bili-audio-progress-wrap');
+        const progressTrack = audioPanelEl.querySelector('#bili-audio-progress-track');
+        const progressBar = audioPanelEl.querySelector('#bili-audio-progress-bar');
+        const progressThumb = audioPanelEl.querySelector('#bili-audio-progress-thumb');
+        const timeCurrentEl = audioPanelEl.querySelector('#bili-audio-time-current');
+
+        const volumeWrap = audioPanelEl.querySelector('#bili-audio-volume-wrap');
+        const volumeTrack = audioPanelEl.querySelector('#bili-audio-volume-track');
+        const volumeBar = audioPanelEl.querySelector('#bili-audio-volume-bar');
+        const volumeThumb = audioPanelEl.querySelector('#bili-audio-volume-thumb');
+        const volumeTextEl = audioPanelEl.querySelector('#bili-audio-volume-text');
+        const volumeBtn = audioPanelEl.querySelector('#bili-audio-volume-btn');
+
+        const getTrackRatio = (e, trackEl) => {
+            const rect = trackEl.getBoundingClientRect();
+            if (rect.width <= 0) return 0;
+            const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
+            return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        };
+
+        // 1. 进度条交互（点击与拖动）
+        if (progressWrap && progressTrack) {
+            const handleProgressSeek = (e) => {
+                const ratio = getTrackRatio(e, progressTrack);
+                const dur = customAudioEl.duration || 0;
+                const targetTime = ratio * dur;
+                const pct = ratio * 100;
+                if (progressBar) progressBar.style.width = pct + '%';
+                if (progressThumb) progressThumb.style.left = pct + '%';
+                if (timeCurrentEl) timeCurrentEl.textContent = formatMediaTime(targetTime);
+                return targetTime;
+            };
+
+            const onProgressPointerDown = (e) => {
+                isDraggingProgress = true;
+                if (pauseDebounceTimer) {
+                    clearTimeout(pauseDebounceTimer);
+                    pauseDebounceTimer = null;
+                }
+                if (seekSettleTimer) {
+                    clearTimeout(seekSettleTimer);
+                    seekSettleTimer = null;
+                }
+                isSeekingOperation = true;
+                const targetTime = handleProgressSeek(e);
+
+                const onProgressPointerMove = (moveEvt) => {
+                    if (!isDraggingProgress) return;
+                    handleProgressSeek(moveEvt);
+                };
+
+                const onProgressPointerUp = (upEvt) => {
+                    if (!isDraggingProgress) return;
+                    isDraggingProgress = false;
+                    const finalTime = handleProgressSeek(upEvt);
+                    try {
+                        customAudioEl.currentTime = finalTime;
+                    } catch {}
+                    window.removeEventListener('pointermove', onProgressPointerMove);
+                    window.removeEventListener('pointerup', onProgressPointerUp);
+                    window.removeEventListener('pointercancel', onProgressPointerUp);
+                    if (seekSettleTimer) clearTimeout(seekSettleTimer);
+                    seekSettleTimer = setTimeout(() => {
+                        isSeekingOperation = false;
+                        updatePlayPauseBtnState();
+                    }, 200);
+                };
+
+                window.addEventListener('pointermove', onProgressPointerMove);
+                window.addEventListener('pointerup', onProgressPointerUp);
+                window.addEventListener('pointercancel', onProgressPointerUp);
+            };
+
+            progressWrap.addEventListener('pointerdown', onProgressPointerDown);
+        }
+
+        // 2. 音量条交互（点击与拖动）
+        if (volumeWrap && volumeTrack) {
+            const handleVolumeAdjust = (e) => {
+                const ratio = getTrackRatio(e, volumeTrack);
+                const pct = Math.round(ratio * 100);
+                if (volumeBar) volumeBar.style.width = pct + '%';
+                if (volumeThumb) volumeThumb.style.left = pct + '%';
+                if (volumeTextEl) volumeTextEl.textContent = pct + '%';
+                if (volumeBtn) {
+                    volumeBtn.innerHTML = (pct === 0) ? ICONS.VOLUME_MUTE : ICONS.VOLUME_HIGH;
+                }
+                customAudioEl.muted = false;
+                customAudioEl.volume = ratio;
+                syncVolumeAudioToVideo();
+            };
+
+            const onVolumePointerDown = (e) => {
+                isDraggingVolume = true;
+                handleVolumeAdjust(e);
+
+                const onVolumePointerMove = (moveEvt) => {
+                    if (!isDraggingVolume) return;
+                    handleVolumeAdjust(moveEvt);
+                };
+
+                const onVolumePointerUp = () => {
+                    if (!isDraggingVolume) return;
+                    isDraggingVolume = false;
+                    window.removeEventListener('pointermove', onVolumePointerMove);
+                    window.removeEventListener('pointerup', onVolumePointerUp);
+                    window.removeEventListener('pointercancel', onVolumePointerUp);
+                };
+
+                window.addEventListener('pointermove', onVolumePointerMove);
+                window.addEventListener('pointerup', onVolumePointerUp);
+                window.addEventListener('pointercancel', onVolumePointerUp);
+            };
+
+            volumeWrap.addEventListener('pointerdown', onVolumePointerDown);
+        }
+
+        // 3. 音量按钮点击静音/取消静音
+        if (volumeBtn) {
+            volumeBtn.onclick = () => {
+                if (customAudioEl.muted || customAudioEl.volume === 0) {
+                    customAudioEl.muted = false;
+                    if (customAudioEl.volume === 0) {
+                        customAudioEl.volume = 0.5;
+                    }
+                } else {
+                    customAudioEl.muted = true;
+                }
+                syncVolumeAudioToVideo();
+                updateCustomPlayerUI();
+            };
+        }
+    }
+
     // 13. 创建纯音频播放面板
     function createAudioPanel() {
         const mount = getPlayerMountTarget();
@@ -1491,6 +1690,7 @@
             }
             applyThemeToPanel();
             updateTrafficDisplay();
+            updateCustomPlayerUI();
             return;
         }
 
@@ -1502,6 +1702,17 @@
                     display: none !important;
                     width: 0 !important;
                     height: 0 !important;
+                }
+                .bili-slider-wrap:hover .bili-slider-track {
+                    height: 7px !important;
+                }
+                .bili-slider-wrap:hover .bili-slider-thumb {
+                    transform: translate(-50%, -50%) scale(1.25) !important;
+                }
+                .bpx-player-ctrl-progress-played,
+                .bpx-player-ctrl-volume-progress-bar,
+                .bpx-player-ctrl-volume-progress-inner {
+                    background-color: #00aeec !important;
                 }
             `;
             document.head.appendChild(styleEl);
@@ -1577,8 +1788,41 @@
                     </div>
                 </div>
 
-                <!-- 原生音频条 -->
-                <audio id="bili-native-audio" controls style="width: 100%; outline: none; margin-bottom: 10px; height: 38px; transition: filter 0.2s;"></audio>
+                <!-- 底层原生音频驱动节点（隐藏 controls，由自定义 UI 精确驱动） -->
+                <audio id="bili-native-audio" style="display: none;"></audio>
+
+                <!-- 自定义纯音频控制器（进度条已播段与音量0~当前大小填充段均采用B站官方主题蓝 #00aeec） -->
+                <div id="bili-audio-control-bar" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; box-sizing: border-box; user-select: none;">
+                    <!-- 播放进度条区域 -->
+                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                        <span id="bili-audio-time-current" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.8; min-width: 42px; text-align: right;">00:00</span>
+                        <div id="bili-audio-progress-wrap" class="bili-slider-wrap" style="flex: 1; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
+                            <div id="bili-audio-progress-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
+                                <!-- 已经播放的进度条部分（B站蓝色） -->
+                                <div id="bili-audio-progress-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
+                                <!-- 进度滑块小圆点 -->
+                                <div id="bili-audio-progress-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #ffffff; border: 2.5px solid #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.25); pointer-events: none; transition: transform 0.15s ease;"></div>
+                            </div>
+                        </div>
+                        <span id="bili-audio-time-total" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.6; min-width: 42px;">00:00</span>
+                    </div>
+
+                    <!-- 音量控制区域 -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; padding-right: 4px;">
+                        <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
+                            ${ICONS.VOLUME_HIGH}
+                        </button>
+                        <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 80px; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
+                            <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
+                                <!-- 音量0~音量大小那一段（B站蓝色） -->
+                                <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
+                                <!-- 音量滑块小圆点 -->
+                                <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #ffffff; border: 2.5px solid #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.25); pointer-events: none; transition: transform 0.15s ease;"></div>
+                            </div>
+                        </div>
+                        <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 34px;">100%</span>
+                    </div>
+                </div>
 
                 <!-- 音质与倍速并排控制区 -->
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
@@ -1675,10 +1919,14 @@
                     updatePlayPauseBtnState(true);
                 }
             });
+            customAudioEl.addEventListener('timeupdate', updateCustomPlayerUI);
+            customAudioEl.addEventListener('loadedmetadata', updateCustomPlayerUI);
+            customAudioEl.addEventListener('durationchange', updateCustomPlayerUI);
             customAudioEl.addEventListener('volumechange', () => {
                 if (!isSyncingVolume) {
                     syncVolumeAudioToVideo();
                 }
+                updateCustomPlayerUI();
             });
         }
 
@@ -1751,6 +1999,8 @@
             };
         });
 
+        bindCustomPlayerControls();
+        updateCustomPlayerUI();
         renderQualityButtons();
         applyThemeToPanel();
         updateTrafficDisplay();
