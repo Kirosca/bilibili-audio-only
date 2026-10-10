@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.0
-// @description  一键切换纯音频省流量模式，多档音频品质双缓冲无缝切换，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，B站原生规范内联SVG矢量图标
+// @version      1.9.1
+// @description  一键切换纯音频省流量模式，多档音频品质双缓冲无缝切换，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -31,19 +31,19 @@
     let isVideoSwitchPending = false;
     let standbyAudioEl = null;
 
-    // B 站原生设计规范内联 SVG 矢量图标集（彻底替代系统 Emoji，跨平台渲染统一且自适应深浅色主题）
+    // 苹果 SF Symbols 官方设计规范内联 SVG 矢量图标集（层次化质感、极致圆角、完美自适应深浅色主题）
     const ICONS = {
-        HEADPHONES: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`,
-        PLAY: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>`,
-        PAUSE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
-        SCREEN: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-        VIDEO: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6699" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
-        MUSIC: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00aeec" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
-        BOLT: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: #4cd964; vertical-align: -2px; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
-        REPEAT_ONE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/><path d="M11 14h2"/></svg>`,
-        PIN: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.77V5h1a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2h1v5.77a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24Z"/></svg>`,
+        HEADPHONES: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="currentColor" fill-opacity="0.16"/></svg>`,
+        PLAY: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><path d="M7.5 4.87c0-.77.85-1.24 1.5-.83l10.22 6.3c.63.39.63 1.3 0 1.69L9 18.33c-.65.41-1.5-.06-1.5-.83V4.87z"/></svg>`,
+        PAUSE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><path d="M6 5a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5zm7 0a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2V5z"/></svg>`,
+        SCREEN: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><rect x="2" y="4" width="20" height="13" rx="2.5"/><path d="M8 20h8M12 17v3"/></svg>`,
+        VIDEO: `<svg width="14" height="14" viewBox="0 0 24 24" fill="#ff6699" style="vertical-align: -2px; margin-right: 4px;"><path d="M4 5a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9a3 3 0 0 0 3-3v-1.8l4.4 2.64A1 1 0 0 0 22 16V8a1 1 0 0 0-1.6-.8L16 9.8V8a3 3 0 0 0-3-3H4z"/></svg>`,
+        MUSIC: `<svg width="14" height="14" viewBox="0 0 24 24" fill="#00aeec" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h5V3h-7z"/></svg>`,
+        BOLT: `<svg width="14" height="14" viewBox="0 0 24 24" fill="#4cd964" style="vertical-align: -2px; margin-right: 4px;"><path d="M11.67 1.25a1 1 0 0 0-.92.62l-7 13.5A1 1 0 0 0 4.64 17h6.08l-2.39 5.38a1 1 0 0 0 1.76.96l9.5-13.5a1 1 0 0 0-.89-1.59h-5.97l2.4-5.38a1 1 0 0 0-.46-1.12 1 1 0 0 0-.99-.05z"/></svg>`,
+        REPEAT_ONE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 9.5l1.5-1v7.5" stroke-width="2.2"/></svg>`,
+        PIN: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 3px;"><path d="M16 3a1 1 0 0 1 1 1v1.5a1 1 0 0 1-.3.7L15 8v3l2.7 2.7a1 1 0 0 1 .3.7V16a1 1 0 0 1-1 1h-4v6a1 1 0 0 1-2 0v-6H7a1 1 0 0 1-1-1v-1.6a1 1 0 0 1 .3-.7L9 11V8l-1.7-1.8a1 1 0 0 1-.3-.7V4a1 1 0 0 1 1-1h8z"/></svg>`,
         GLOBE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
-        TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`
+        TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 3px;"><path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 0 1 0 2h-1.07l-1.2 13.17A3 3 0 0 1 13.75 22H10.25a3 3 0 0 1-2.98-2.83L6.07 6H5a1 1 0 0 1 0-2h5V3zm2 1h2V3h-2v1zm-2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1z"/></svg>`
     };
 
     // 音量与静音记忆系统及双向防暴音同步控制
