@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.5
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，黑胶大面板采用平滑连续比例映射自适应算法（彻底根除页面缩放放大时面板阶梯式变小的反常现象，保障黑胶唱盘饱满视效与呼吸留白，杜绝纵向溢出滚动），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.6
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，黑胶大面板深度对齐视频窗口0.7黄金比例（卡片宽度与高度及黑胶唱盘按视口0.7比例舒展呈现，兼具大屏饱满沉浸与呼吸留白，杜绝纵向溢出滚动），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1750,14 +1750,14 @@
         }
     }
 
-    // 12. 根据父元素视口动态自适应卡片与黑胶唱盘尺寸（平滑连续比例映射，杜绝缩放阶梯过小，根除溢出滚动条）
+    // 12. 根据父元素视口动态自适应卡片与黑胶唱盘尺寸（对齐视频窗口 0.7 比例，沉浸饱满呈现）
     let panelResizeObserver = null;
     function updateAudioCardResponsiveSize() {
         if (!audioPanelEl) return;
         const panelCard = audioPanelEl.querySelector('#bili-audio-card');
         if (!panelCard) return;
 
-        // 获取父容器有效视口宽度与高度
+        // 获取视频窗口父容器有效视口宽度与高度
         const rect = audioPanelEl.getBoundingClientRect();
         const parentW = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientWidth : 0);
         const parentH = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientHeight : 0);
@@ -1765,24 +1765,36 @@
         const h = Math.round(rect.height || audioPanelEl.clientHeight || parentH || window.innerHeight);
         if (w <= 0 || h <= 0) return;
 
-        // 1. 平滑连续比例映射算法（方案 A）：
-        // 卡片除唱盘外的固定控件高度合计约为 142px ~ 162px（纯音频标识+标题+进度条+音量+倍速音质+主控按钮+上下内边距与间距）
-        // 根据父容器垂直方向可赋予唱盘的最大物理可用高度动态分配，绝不采用断崖式阶梯缩水
-        const reservedControlsH = (h < 380) ? 142 : 162;
-        const safePaddingY = 18;
-        const maxDiscByHeight = Math.max(110, h - safePaddingY - reservedControlsH);
-        const maxDiscByWidth = Math.max(110, Math.round(w * 0.42));
-
-        // 唱盘直径上限：全屏/大屏封顶 230px，常规桌面播放器目标基准 176px ~ 190px
-        let discSize = Math.min(230, maxDiscByHeight, maxDiscByWidth);
-
-        // 平滑下限保护：只要视口高度不低于 360px，唱盘直径保持在 160px 以上饱满呈现；低于 360px 时线性平滑衰减
-        if (h >= 360) {
-            discSize = Math.max(160, discSize);
-        } else {
-            discSize = Math.max(110, discSize);
+        // 1. 卡片宽度与比例：严格对齐视频窗口的 0.7（70%）比例
+        // 紧凑窄窗（w < 560）时保底 460px（或 92%）以容纳控制条与倍速，宽屏大屏下充分展开至 0.7 比例（上限 980px）
+        let targetCardW = Math.round(w * 0.7);
+        if (w < 560) {
+            targetCardW = Math.min(Math.round(w * 0.94), 460);
+        } else if (targetCardW > 980) {
+            targetCardW = 980;
         }
-        discSize = Math.min(230, Math.round(discSize));
+
+        // 2. 卡片高度与黑胶唱盘：按视频窗口高度的 0.7 比例黄金舒展
+        // 预估卡片除唱盘外的固定控件总高度（纯音频标识+标题+进度条+音量+倍速音质+主控按钮+上下内边距与间距）
+        const isCompactHeight = h < 400;
+        const isSpaciousHeight = h >= 640;
+        const reservedControlsH = isCompactHeight ? 140 : (isSpaciousHeight ? 175 : 158);
+
+        // 由 0.7 比例推导黑胶唱盘目标直径
+        const targetCardH = Math.round(h * 0.7);
+        let discSize = Math.round(targetCardH - reservedControlsH);
+
+        // 结合卡片宽度约束（唱盘直径不超过卡片宽度的 46%）
+        const maxDiscByWidth = Math.round(targetCardW * 0.46);
+        discSize = Math.min(discSize, maxDiscByWidth);
+
+        // 设定唱盘合理区间：极限小窗保底 120px，在宽屏/全屏下可达 320px~340px，充分展现 0.7 比例的沉浸大气
+        discSize = Math.max(120, Math.min(340, discSize));
+
+        // 绝对安全守卫：确保卡片总高度不超过视口高度的 90%，彻底杜绝纵向溢出滚动
+        if (discSize + reservedControlsH > h - 18) {
+            discSize = Math.max(110, Math.round(h - 18 - reservedControlsH));
+        }
 
         const coverSize = Math.round(discSize * 0.622);
         const centerSize = Math.max(14, Math.round(discSize * 0.102));
@@ -1790,22 +1802,17 @@
         const wrapW = discSize + 24;
         const wrapH = discSize + 6;
 
-        // 2. 卡片最大宽度与内边距平滑连续映射（杜绝页面缩放放大时卡片宽度骤降）
-        let maxCardW = Math.min(620, Math.max(460, Math.round(w * 0.88)));
-        if (h >= 650 && w >= 960) {
-            maxCardW = Math.min(660, Math.round(w * 0.72));
-        }
+        // 3. 内边距与文字按钮尺寸适配
+        const cardPadding = isCompactHeight ? '8px 16px' : (isSpaciousHeight ? '16px 26px' : '12px 20px');
+        const titleFontSize = isCompactHeight ? '14px' : (isSpaciousHeight ? '16px' : '15px');
+        const ctrlBtnPadding = isCompactHeight ? '5px 14px' : (isSpaciousHeight ? '7px 20px' : '6px 18px');
+        const ctrlBtnFontSize = isCompactHeight ? '12px' : (isSpaciousHeight ? '14px' : '13px');
+        const rateBtnPadding = isCompactHeight ? '2px 6px' : (isSpaciousHeight ? '4px 8px' : '3px 7px');
+        const rateBtnFontSize = isCompactHeight ? '10.5px' : (isSpaciousHeight ? '12px' : '11px');
 
-        const isCompactHeight = h < 380;
-        const cardPadding = isCompactHeight ? '8px 16px' : (h >= 650 ? '16px 24px' : '12px 20px');
-        const titleFontSize = isCompactHeight ? '14px' : '15px';
-        const ctrlBtnPadding = isCompactHeight ? '5px 14px' : '6px 18px';
-        const ctrlBtnFontSize = isCompactHeight ? '12px' : '13px';
-        const rateBtnPadding = isCompactHeight ? '2px 6px' : '3px 7px';
-        const rateBtnFontSize = isCompactHeight ? '10.5px' : '11px';
-
-        // 3. 应用至卡片 DOM
-        panelCard.style.maxWidth = `${maxCardW}px`;
+        // 4. 应用至卡片 DOM
+        panelCard.style.width = `${Math.min(94, Math.max(70, Math.round(targetCardW / w * 100)))}%`;
+        panelCard.style.maxWidth = `${targetCardW}px`;
         panelCard.style.padding = cardPadding;
 
         const titleEl = panelCard.querySelector('#bili-vinyl-title');
@@ -2270,7 +2277,7 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; max-width: 580px; width: 92%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
+            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
                 <!-- 纯音频模式小标识 -->
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
                     <span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频模式</span>
