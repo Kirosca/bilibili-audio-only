@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.1.3
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），自动提取B站视频封面与曲目标题，大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.2.0
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -780,45 +780,120 @@
         updateTrafficDisplay();
     }
 
+    // 内存元数据缓存字典（key 为 videoKey，缓存当前视频已拉取的封面与权威标题）
+    const videoMetaCache = new Map();
+
+    // 获取当前页面的 BVID
+    function getCurrentBvid() {
+        const bvidPathMatch = location.pathname.match(/\/(BV[a-zA-Z0-9]+)/i);
+        if (bvidPathMatch) return bvidPathMatch[1];
+        const sp = new URLSearchParams(location.search);
+        return sp.get('bvid') || '';
+    }
+
     // 提取当前视频的封面与曲目标题（供网易云黑胶大唱片展示）
     function getCurrentVideoMeta() {
+        const currentKey = getVideoKey();
+        if (videoMetaCache.has(currentKey)) {
+            const cached = videoMetaCache.get(currentKey);
+            if (cached && (cached.title || cached.cover)) {
+                return cached;
+            }
+        }
+
         let title = '';
         let cover = '';
+        const currentBvid = getCurrentBvid();
+        const currentP = new URLSearchParams(location.search).get('p') || '1';
 
+        // 1. SSR 初始状态校验（必须严格匹配当前页面的 BVID，杜绝 SPA 切视频后沿用老视频数据）
         try {
             const initState = window.__INITIAL_STATE__;
-            if (initState?.videoData) {
-                title = initState.videoData.title || '';
-                cover = initState.videoData.pic || '';
+            if (initState?.videoData && currentBvid) {
+                const initBvid = (initState.videoData.bvid || '').toLowerCase();
+                if (initBvid === currentBvid.toLowerCase()) {
+                    let baseTitle = initState.videoData.title || '';
+                    const pIdx = parseInt(currentP, 10) - 1;
+                    if (initState.videoData.pages && initState.videoData.pages.length > 1 && initState.videoData.pages[pIdx]?.part) {
+                        baseTitle = `${baseTitle} - P${currentP} ${initState.videoData.pages[pIdx].part}`;
+                    }
+                    title = baseTitle;
+                    cover = initState.videoData.pic || '';
+                }
             } else if (initState?.epInfo) {
                 title = initState.epInfo.share_copy || initState.h1Title || '';
                 cover = initState.epInfo.cover || '';
             }
         } catch {}
 
+        // 2. 实时 DOM 提取（最具备真实性的第一真理来源）
+        if (!title) {
+            try {
+                // 普通视频标题
+                const h1 = document.querySelector('h1.video-title') || document.querySelector('.video-title');
+                if (h1 && h1.textContent.trim()) {
+                    let h1Text = h1.textContent.trim();
+                    // 检查分 P 标题
+                    const partActive = document.querySelector('.cur-list .part-active')?.textContent?.trim() ||
+                                       document.querySelector('.video-pod__list .active')?.textContent?.trim() ||
+                                       document.querySelector('.list-box li.on')?.textContent?.trim();
+                    if (partActive && !h1Text.includes(partActive)) {
+                        h1Text = `${h1Text} - ${partActive}`;
+                    }
+                    title = h1Text;
+                }
+            } catch {}
+        }
+
+        if (!title) {
+            try {
+                // 番剧/影视标题
+                const mediaTitle = document.querySelector('.media-title') || document.querySelector('a.mediainfo_title__7FmYv');
+                if (mediaTitle && mediaTitle.textContent.trim()) {
+                    title = mediaTitle.textContent.trim();
+                }
+            } catch {}
+        }
+
+        if (!title) {
+            // document.title 兜底
+            const docTitle = (document.title || '').replace(/_哔哩哔哩_bilibili.*$/i, '').trim();
+            if (docTitle && docTitle !== '哔哩哔哩' && docTitle !== 'bilibili') {
+                title = docTitle;
+            } else {
+                title = 'Bilibili 纯音频模式';
+            }
+        }
+
+        // 3. 封面提取（页面实时 DOM）
         if (!cover) {
             try {
+                // 原生 video poster 属性
+                const videoEl = document.querySelector('video');
+                if (videoEl && videoEl.getAttribute('poster')) {
+                    cover = videoEl.getAttribute('poster');
+                }
+            } catch {}
+        }
+
+        if (!cover) {
+            try {
+                // 播放器海报节点
+                const posterImg = document.querySelector('.bpx-player-poster img, .bilibili-player-video-poster img, .bpx-player-video-poster img');
+                if (posterImg && posterImg.src) {
+                    cover = posterImg.src;
+                }
+            } catch {}
+        }
+
+        if (!cover) {
+            try {
+                // 仅当当前为初始 BVID 时采信 meta 标签
                 const ogImg = document.querySelector('meta[property="og:image"]')?.content;
                 if (ogImg) cover = ogImg;
             } catch {}
         }
-        if (!title) {
-            try {
-                const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
-                if (ogTitle) title = ogTitle;
-            } catch {}
-        }
 
-        if (!title) {
-            try {
-                const h1 = document.querySelector('h1.video-title') || document.querySelector('.video-title');
-                if (h1) title = h1.textContent.trim();
-            } catch {}
-        }
-
-        if (!title) {
-            title = (document.title || '').replace(/_哔哩哔哩_bilibili.*$/i, '').trim() || 'Bilibili 纯音频模式';
-        }
         if (cover && cover.startsWith('//')) {
             cover = 'https:' + cover;
         }
@@ -826,23 +901,70 @@
         return { title, cover };
     }
 
-    // 更新网易云黑胶大唱片的封面图与曲目标题
-    function updateVinylMeta() {
-        if (!audioPanelEl) return;
+    // 主动异步向 B 站官方接口拉取权威高清封面与分P标题（100% 官方数据兜底）
+    async function fetchVideoMetaFromApi(bvid, targetKey) {
+        if (!bvid) return;
+        try {
+            const res = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+            if (!res.ok) return;
+            const json = await res.json();
+            if (json?.code === 0 && json?.data) {
+                const data = json.data;
+                let apiTitle = data.title || '';
+                const p = new URLSearchParams(location.search).get('p') || '1';
+                const pNum = parseInt(p, 10);
+                if (data.pages && data.pages.length > 1 && data.pages[pNum - 1]?.part) {
+                    apiTitle = `${data.title} - P${pNum} ${data.pages[pNum - 1].part}`;
+                }
+                let apiCover = data.pic || '';
+                if (apiCover && apiCover.startsWith('//')) apiCover = 'https:' + apiCover;
+
+                const meta = { title: apiTitle, cover: apiCover };
+                videoMetaCache.set(targetKey, meta);
+
+                // 若当前仍在同一视频，即刻无缝刷新大面板
+                if (getVideoKey() === targetKey) {
+                    applyVinylMetaToUI(meta);
+                }
+            }
+        } catch {}
+    }
+
+    // 真正将元数据渲染更新至大面板 DOM
+    function applyVinylMetaToUI(meta) {
+        if (!audioPanelEl || !meta) return;
         const coverEl = audioPanelEl.querySelector('#bili-vinyl-cover');
         const titleEl = audioPanelEl.querySelector('#bili-vinyl-title');
-        const meta = getCurrentVideoMeta();
 
         if (coverEl) {
+            coverEl.style.backgroundSize = 'cover';
+            coverEl.style.backgroundPosition = 'center';
+            coverEl.style.backgroundRepeat = 'no-repeat';
             if (meta.cover) {
                 coverEl.style.backgroundImage = `url("${meta.cover}")`;
             } else {
-                coverEl.style.background = 'radial-gradient(circle, #333 0%, #111 100%)';
+                coverEl.style.backgroundImage = 'radial-gradient(circle, #333 0%, #111 100%)';
             }
         }
         if (titleEl && meta.title) {
             titleEl.textContent = meta.title;
             titleEl.title = meta.title;
+        }
+    }
+
+    // 更新网易云黑胶大唱片的封面图与曲目标题
+    function updateVinylMeta() {
+        if (!audioPanelEl) return;
+        const currentKey = getVideoKey();
+        const currentBvid = getCurrentBvid();
+
+        // 1. 同步应用当前已提取到的元数据
+        const meta = getCurrentVideoMeta();
+        applyVinylMetaToUI(meta);
+
+        // 2. 若尚未拿到官方权威缓存，异步发起 API 兜底校验
+        if (currentBvid && !videoMetaCache.has(currentKey)) {
+            fetchVideoMetaFromApi(currentBvid, currentKey);
         }
     }
 
@@ -2763,6 +2885,10 @@
             }
             updateMemoryStatusDisplay();
             updateVinylMeta();
+            // 延时重试梯队：适应 B 站单页应用（SPA）异步渲染标题与海报的时间差
+            [80, 250, 600, 1200, 2500].forEach(delay => {
+                setTimeout(updateVinylMeta, delay);
+            });
         };
 
         checkPageChange = () => {
@@ -2846,6 +2972,15 @@
             childList: true,
             subtree: true
         });
+
+        // 观察器 3：监听文档标题变化（B站单页应用换视频必改 title，瞬间同步更新大面板曲目标题与封面）
+        const titleNode = document.querySelector('title');
+        if (titleNode) {
+            const titleObserver = new MutationObserver(() => {
+                updateVinylMeta();
+            });
+            titleObserver.observe(titleNode, { childList: true, characterData: true, subtree: true });
+        }
 
         mountToggleButton();
 
