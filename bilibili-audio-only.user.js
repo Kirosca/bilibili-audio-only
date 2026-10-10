@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.1.1
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转30度（优化起落与落针真实音轨姿态），自动提取B站视频封面与曲目标题，大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.1.2
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转15度（优化起落与落针真实音轨姿态），自动提取B站视频封面与曲目标题，大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -463,7 +463,7 @@
             discEl.style.animationPlayState = isPaused ? 'paused' : 'running';
         }
         if (needleEl) {
-            needleEl.style.transform = isPaused ? 'rotate(-58deg)' : 'rotate(-30deg)';
+            needleEl.style.transform = isPaused ? 'rotate(-43deg)' : 'rotate(-15deg)';
         }
     }
 
@@ -2310,7 +2310,7 @@
                 <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
                     <!-- 仿真留声机唱针缩放定位容器 -->
                     <div id="bili-vinyl-needle-scaler" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: scale(1); transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);">
-                        <div id="bili-vinyl-needle-wrap" style="width: 44px; height: 102px; transform-origin: 16px 16px; transform: rotate(-58deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
+                        <div id="bili-vinyl-needle-wrap" style="width: 44px; height: 102px; transform-origin: 16px 16px; transform: rotate(-43deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
                             <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <!-- 唱针转轴底座 -->
                                 <circle cx="16" cy="16" r="14" fill="#2d3035" stroke="#4b5058" stroke-width="2.5"/>
