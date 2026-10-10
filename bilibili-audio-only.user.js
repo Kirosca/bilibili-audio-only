@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.5
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增当前视频已用流量与节约流量本地持久化存储（刷新页面不丢失），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.6
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -576,13 +576,16 @@
         return { active: getGlobalDefault(), source: 'default' };
     }
 
-    // 流量统计持久化管理（LRU 上限 500）
-    const STORAGE_KEY_TRAFFIC_STATS = 'bili_audio_traffic_stats_v1';
+    // 流量统计会话存储管理（sessionStorage：刷新页面保留，关闭当前窗口/标签页自动销毁，LRU 上限 500）
+    const STORAGE_KEY_TRAFFIC_STATS = 'bili_audio_traffic_stats_session_v1';
     const MAX_TRAFFIC_LIMIT = 500;
+
+    // 清理此前 localStorage 旧版本遗留键值
+    try { localStorage.removeItem('bili_audio_traffic_stats_v1'); } catch {}
 
     function loadTrafficStatsList() {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY_TRAFFIC_STATS);
+            const raw = sessionStorage.getItem(STORAGE_KEY_TRAFFIC_STATS);
             if (!raw) return [];
             const list = JSON.parse(raw);
             return Array.isArray(list) ? list : [];
@@ -593,7 +596,7 @@
 
     function saveTrafficStatsList(list) {
         try {
-            localStorage.setItem(STORAGE_KEY_TRAFFIC_STATS, JSON.stringify(list.slice(0, MAX_TRAFFIC_LIMIT)));
+            sessionStorage.setItem(STORAGE_KEY_TRAFFIC_STATS, JSON.stringify(list.slice(0, MAX_TRAFFIC_LIMIT)));
         } catch {}
     }
 
