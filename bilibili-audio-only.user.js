@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.3
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.4
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增当前视频已用流量实时精准统计，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1119,11 +1119,12 @@
         return `${pad(min)}:${pad(sec)}`;
     }
 
-    // 8. 更新流量对比与节省数据显示
+    // 8. 更新流量对比与节省数据显示（当前视频已用流量 + 累计节约流量）
     function updateTrafficDisplay() {
         const savedPercent = Math.max(0, ((videoBandwidth - audioBandwidth) / videoBandwidth * 100)).toFixed(1);
         const videoRate = (videoBandwidth / 8 / 1024).toFixed(0);
         const audioRate = (audioBandwidth / 8 / 1024).toFixed(0);
+        const totalUsedBytes = (audioBandwidth / 8) * totalPlayedSeconds;
         const totalSavedBytes = Math.max(0, (videoBandwidth - audioBandwidth) / 8 * totalPlayedSeconds);
 
         const rateElem = document.querySelector('#bili-traffic-rates');
@@ -1135,6 +1136,11 @@
                     <div style="display: flex; align-items: center;">${ICONS.BOLT}流量节约率：<span style="color: #4cd964; font-weight: bold; margin-left: 2px;">-${savedPercent}%</span></div>
                 </div>
             `;
+        }
+
+        const usedElem = document.querySelector('#bili-traffic-used');
+        if (usedElem) {
+            usedElem.textContent = formatBytes(totalUsedBytes);
         }
 
         const savedElem = document.querySelector('#bili-traffic-saved');
@@ -1820,9 +1826,15 @@
                 <!-- 流量对比区域 -->
                 <div id="bili-traffic-box" style="width: 100%; border: 1px solid; border-radius: 6px; padding: 8px 14px; margin-bottom: 10px; font-size: 12px; line-height: 1.6; box-sizing: border-box;">
                     <div id="bili-traffic-rates" style="border-bottom: 1px solid rgba(127,127,127,0.18); padding-bottom: 6px; margin-bottom: 6px;"></div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>已节约流量累计：</span>
-                        <span id="bili-traffic-saved" style="font-size: 14px; font-weight: bold; color: #4cd964;">0 MB</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center;">
+                            <span>当前视频已用流量：</span>
+                            <span id="bili-traffic-used" style="font-size: 14px; font-weight: bold; color: #00aeec; margin-left: 2px;">0 B</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span>累计节约流量：</span>
+                            <span id="bili-traffic-saved" style="font-size: 14px; font-weight: bold; color: #4cd964; margin-left: 2px;">0 B</span>
+                        </div>
                     </div>
                 </div>
 
