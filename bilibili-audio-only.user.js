@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.9
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，大面板外框宽高显式锁定为视频窗口的0.7黄金比例（黑胶唱盘尺寸提升至0.9比例舒展居中展示，留声机唱针与封面等比级联微调，面板整体宽高恒定不塌陷，兼具沉浸饱满与呼吸留白，杜绝纵向溢出滚动），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.1.0
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1773,23 +1773,18 @@
             targetCardW = 980;
         }
 
-        // 2. 卡片高度：严格锁定为视频窗口高度的 0.7（70%）比例，绝对不随黑胶变小而塌陷缩水
-        let targetCardH = Math.round(h * 0.7);
-        const minRequiredH = 260;
-        targetCardH = Math.max(minRequiredH, Math.min(Math.round(h - 18), targetCardH));
-
-        // 3. 黑胶唱盘尺寸计算：
+        // 2. 黑胶唱盘尺寸计算（在紧凑包裹模式下，面板高度自适应贴合黑胶与控制栏）
         const isCompactHeight = h < 400;
         const isSpaciousHeight = h >= 640;
         const reservedControlsH = isCompactHeight ? 140 : (isSpaciousHeight ? 175 : 158);
 
-        // 基础唱盘尺寸（在 0.7 面板高度下的标准参考尺寸）
-        let baseDiscSize = Math.round(targetCardH - reservedControlsH);
+        // 可用高度限制，保证包裹黑胶后的卡片总高度舒展贴合且不溢出视频窗口
+        const maxDiscByHeight = Math.max(90, Math.round(h * 0.78 - reservedControlsH));
         const maxDiscByWidth = Math.round(targetCardW * 0.46);
-        baseDiscSize = Math.min(baseDiscSize, maxDiscByWidth);
-        baseDiscSize = Math.max(120, Math.min(340, baseDiscSize));
+        let baseDiscSize = Math.min(maxDiscByHeight, maxDiscByWidth);
+        baseDiscSize = Math.max(110, Math.min(320, baseDiscSize));
 
-        // 黑胶唱盘大小增加至 0.9 比例（其他元素与卡片高度/宽度严格保持不变，卡片内设弹性垂直留白居中）
+        // 黑胶唱盘大小乘 0.9 比例饱满呈现
         let discSize = Math.max(90, Math.round(baseDiscSize * 0.9));
 
         const coverSize = Math.round(discSize * 0.622);
@@ -1798,7 +1793,7 @@
         const wrapW = discSize + 24;
         const wrapH = discSize + 6;
 
-        // 4. 内边距与文字按钮尺寸适配
+        // 3. 内边距与文字按钮尺寸适配
         const cardPadding = isCompactHeight ? '8px 16px' : (isSpaciousHeight ? '16px 26px' : '12px 20px');
         const titleFontSize = isCompactHeight ? '14px' : (isSpaciousHeight ? '16px' : '15px');
         const ctrlBtnPadding = isCompactHeight ? '5px 14px' : (isSpaciousHeight ? '7px 20px' : '6px 18px');
@@ -1806,13 +1801,13 @@
         const rateBtnPadding = isCompactHeight ? '2px 6px' : (isSpaciousHeight ? '4px 8px' : '3px 7px');
         const rateBtnFontSize = isCompactHeight ? '10.5px' : (isSpaciousHeight ? '12px' : '11px');
 
-        // 5. 应用至卡片 DOM（显式绑定宽度与高度为 0.7 比例，绝不塌陷）
+        // 4. 应用至卡片 DOM（恢复自然紧凑包裹黑胶唱盘与各功能组件，消除上下过度拉伸空隙）
         panelCard.style.width = `${Math.min(94, Math.max(70, Math.round(targetCardW / w * 100)))}%`;
         panelCard.style.maxWidth = `${targetCardW}px`;
-        panelCard.style.height = `${targetCardH}px`;
-        panelCard.style.minHeight = `${targetCardH}px`;
+        panelCard.style.height = 'auto';
+        panelCard.style.minHeight = 'auto';
         panelCard.style.padding = cardPadding;
-        panelCard.style.justifyContent = 'space-between';
+        panelCard.style.justifyContent = 'flex-start';
 
         const titleEl = panelCard.querySelector('#bili-vinyl-title');
         if (titleEl) {
@@ -1823,30 +1818,37 @@
         const vinylWrap = panelCard.querySelector('#bili-vinyl-wrap');
         if (vinylWrap) {
             vinylWrap.style.width = `${wrapW}px`;
+            vinylWrap.style.height = `${wrapH}px`;
             vinylWrap.style.minHeight = `${wrapH}px`;
-            vinylWrap.style.flex = '1';
+            vinylWrap.style.flex = 'none';
             vinylWrap.style.display = 'flex';
             vinylWrap.style.alignItems = 'center';
             vinylWrap.style.justifyContent = 'center';
-            vinylWrap.style.margin = '2px 0';
+            vinylWrap.style.margin = isCompactHeight ? '2px 0 6px 0' : '4px 0 10px 0';
         }
 
         const vinylDisc = panelCard.querySelector('#bili-vinyl-disc');
         if (vinylDisc) {
             vinylDisc.style.width = `${discSize}px`;
             vinylDisc.style.height = `${discSize}px`;
+            vinylDisc.style.setProperty('border-radius', '50%', 'important');
+            vinylDisc.style.setProperty('clip-path', 'circle(50% at 50% 50%)', 'important');
         }
 
         const vinylCover = panelCard.querySelector('#bili-vinyl-cover');
         if (vinylCover) {
             vinylCover.style.width = `${coverSize}px`;
             vinylCover.style.height = `${coverSize}px`;
+            vinylCover.style.setProperty('border-radius', '50%', 'important');
+            vinylCover.style.setProperty('clip-path', 'circle(50% at 50% 50%)', 'important');
         }
 
         const centerHole = panelCard.querySelector('#bili-vinyl-center-hole');
         if (centerHole) {
             centerHole.style.width = `${centerSize}px`;
             centerHole.style.height = `${centerSize}px`;
+            centerHole.style.setProperty('border-radius', '50%', 'important');
+            centerHole.style.setProperty('clip-path', 'circle(50% at 50% 50%)', 'important');
         }
 
         const needleScaler = panelCard.querySelector('#bili-vinyl-needle-scaler');
@@ -2213,9 +2215,20 @@
                 #bili-audio-card {
                     max-height: calc(100% - 16px);
                     box-sizing: border-box;
-                    transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+                    transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
                 }
-                #bili-vinyl-wrap, #bili-vinyl-disc, #bili-vinyl-cover, #bili-vinyl-center-hole {
+                #bili-vinyl-disc,
+                #bili-vinyl-disc.bili-vinyl-disc,
+                #bili-vinyl-cover,
+                #bili-vinyl-center-hole {
+                    border-radius: 50% !important;
+                    -webkit-border-radius: 50% !important;
+                    clip-path: circle(50% at 50% 50%) !important;
+                    -webkit-clip-path: circle(50% at 50% 50%) !important;
+                    overflow: hidden !important;
+                    transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                #bili-vinyl-wrap {
                     transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1);
                 }
                 #bili-vinyl-needle-scaler {
@@ -2312,11 +2325,11 @@
                     </div>
 
                     <!-- 实体黑胶唱盘主体（多重同心圆沟槽质感） -->
-                    <div id="bili-vinyl-disc" class="bili-vinyl-disc" style="position: relative; width: 196px; height: 196px; border-radius: 50%; background: repeating-radial-gradient(circle at center, #111111 0, #111111 2px, #222222 3px, #151515 4px, #0d0d0d 6px); box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 3px rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: filter 0.2s ease;" title="点击播放/暂停">
+                    <div id="bili-vinyl-disc" class="bili-vinyl-disc" style="position: relative; width: 196px; height: 196px; border-radius: 50% !important; -webkit-border-radius: 50% !important; clip-path: circle(50% at 50% 50%) !important; -webkit-clip-path: circle(50% at 50% 50%) !important; overflow: hidden !important; background: repeating-radial-gradient(circle at center, #111111 0, #111111 2px, #222222 3px, #151515 4px, #0d0d0d 6px); box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 3px rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: filter 0.2s ease;" title="点击播放/暂停">
                         <!-- 黑胶内圈圆形封面 -->
-                        <div id="bili-vinyl-cover" style="width: 122px; height: 122px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid #111111; box-shadow: inset 0 0 10px rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <div id="bili-vinyl-cover" style="width: 122px; height: 122px; border-radius: 50% !important; -webkit-border-radius: 50% !important; clip-path: circle(50% at 50% 50%) !important; -webkit-clip-path: circle(50% at 50% 50%) !important; overflow: hidden !important; background-size: cover; background-position: center; border: 3px solid #111111; box-shadow: inset 0 0 10px rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; position: relative;">
                             <!-- 中心金属轴心孔 -->
-                            <div id="bili-vinyl-center-hole" style="width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #000 0%, #000 30%, #e5e7eb 34%, #9ca3af 65%, #374151 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 2;"></div>
+                            <div id="bili-vinyl-center-hole" style="width: 20px; height: 20px; border-radius: 50% !important; -webkit-border-radius: 50% !important; clip-path: circle(50% at 50% 50%) !important; -webkit-clip-path: circle(50% at 50% 50%) !important; background: radial-gradient(circle, #000 0%, #000 30%, #e5e7eb 34%, #9ca3af 65%, #374151 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 2;"></div>
                         </div>
                     </div>
                 </div>
