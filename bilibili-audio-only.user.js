@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.8
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，新增音频断点续播持久化与B站原视频进度实时双向同步（刷新页面精准保留断点续播，与官方历史记录深度联动），流量计算模块支持全片视频与音频预估总容量对比展示，采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.0
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -455,6 +455,16 @@
         btn.style.background = isPaused ? '#00aeec' : 'transparent';
         btn.style.color = isPaused ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c');
         btn.style.borderColor = isPaused ? '#00aeec' : (isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0');
+
+        // 网易云黑胶唱片旋转与唱针起落动效联动
+        const discEl = audioPanelEl.querySelector('#bili-vinyl-disc');
+        const needleEl = audioPanelEl.querySelector('#bili-vinyl-needle-wrap');
+        if (discEl) {
+            discEl.style.animationPlayState = isPaused ? 'paused' : 'running';
+        }
+        if (needleEl) {
+            needleEl.style.transform = isPaused ? 'rotate(-28deg)' : 'rotate(0deg)';
+        }
     }
 
     // 寻道防护：处理音频暂停事件（防抖过滤寻道瞬态的虚假暂停）
@@ -768,6 +778,72 @@
         currentVideoUsedBytes = stats.usedBytes;
         currentVideoSavedBytes = stats.savedBytes;
         updateTrafficDisplay();
+    }
+
+    // 提取当前视频的封面与曲目标题（供网易云黑胶大唱片展示）
+    function getCurrentVideoMeta() {
+        let title = '';
+        let cover = '';
+
+        try {
+            const initState = window.__INITIAL_STATE__;
+            if (initState?.videoData) {
+                title = initState.videoData.title || '';
+                cover = initState.videoData.pic || '';
+            } else if (initState?.epInfo) {
+                title = initState.epInfo.share_copy || initState.h1Title || '';
+                cover = initState.epInfo.cover || '';
+            }
+        } catch {}
+
+        if (!cover) {
+            try {
+                const ogImg = document.querySelector('meta[property="og:image"]')?.content;
+                if (ogImg) cover = ogImg;
+            } catch {}
+        }
+        if (!title) {
+            try {
+                const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
+                if (ogTitle) title = ogTitle;
+            } catch {}
+        }
+
+        if (!title) {
+            try {
+                const h1 = document.querySelector('h1.video-title') || document.querySelector('.video-title');
+                if (h1) title = h1.textContent.trim();
+            } catch {}
+        }
+
+        if (!title) {
+            title = (document.title || '').replace(/_哔哩哔哩_bilibili.*$/i, '').trim() || 'Bilibili 纯音频模式';
+        }
+        if (cover && cover.startsWith('//')) {
+            cover = 'https:' + cover;
+        }
+
+        return { title, cover };
+    }
+
+    // 更新网易云黑胶大唱片的封面图与曲目标题
+    function updateVinylMeta() {
+        if (!audioPanelEl) return;
+        const coverEl = audioPanelEl.querySelector('#bili-vinyl-cover');
+        const titleEl = audioPanelEl.querySelector('#bili-vinyl-title');
+        const meta = getCurrentVideoMeta();
+
+        if (coverEl) {
+            if (meta.cover) {
+                coverEl.style.backgroundImage = `url("${meta.cover}")`;
+            } else {
+                coverEl.style.background = 'radial-gradient(circle, #333 0%, #111 100%)';
+            }
+        }
+        if (titleEl && meta.title) {
+            titleEl.textContent = meta.title;
+            titleEl.title = meta.title;
+        }
     }
 
     // 1. 判断是否为暗黑模式（优先读取 B 站 Cookie: theme_style）
@@ -1159,7 +1235,7 @@
 
         checkAndApplyAutoMode();
         renderQualityButtons();
-        updateTrafficDisplay();
+        updateVinylMeta();
     }
 
     // 提取音视频码率与多档音频链接，安全隔离其他推荐视频
@@ -1339,52 +1415,9 @@
         return 0;
     }
 
-    // 8. 更新流量对比与节省数据显示（当前视频已用流量 + 累计节约流量 + 方案A全片预估总容量）
+    // 8. 流量数据显示（大面板已精简移除流量模块，留空避免调用处异常）
     function updateTrafficDisplay() {
-        const savedPercent = Math.max(0, ((videoBandwidth - audioBandwidth) / videoBandwidth * 100)).toFixed(1);
-        const videoRate = (videoBandwidth / 8 / 1024).toFixed(0);
-        const audioRate = (audioBandwidth / 8 / 1024).toFixed(0);
-        const effectiveUsedBytes = currentVideoUsedBytes > 0
-            ? currentVideoUsedBytes
-            : (audioBandwidth / 8) * totalPlayedSeconds;
-        const effectiveSavedBytes = currentVideoSavedBytes > 0
-            ? currentVideoSavedBytes
-            : Math.max(0, (videoBandwidth - audioBandwidth) / 8 * totalPlayedSeconds);
-
-        const duration = getCurrentMediaDuration();
-        const totalAudioBytes = duration > 0 ? (audioBandwidth / 8) * duration : 0;
-        const totalVideoBytes = duration > 0 ? (videoBandwidth / 8) * duration : 0;
-
-        const rateElem = document.querySelector('#bili-traffic-rates');
-        if (rateElem) {
-            rateElem.innerHTML = `
-                <div style="display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center;">${ICONS.VIDEO}视频预计码率：<span style="color: #ff6699; margin-left: 2px;">${videoRate} KB/s</span></div>
-                    <div style="display: flex; align-items: center;">${ICONS.MUSIC}音频当前码率：<span style="color: #00aeec; margin-left: 2px;">${audioRate} KB/s</span></div>
-                    <div style="display: flex; align-items: center;">${ICONS.BOLT}流量节约率：<span style="color: #4cd964; font-weight: bold; margin-left: 2px;">-${savedPercent}%</span></div>
-                </div>
-            `;
-        }
-
-        const usedElem = document.querySelector('#bili-traffic-used');
-        if (usedElem) {
-            usedElem.textContent = formatBytes(effectiveUsedBytes);
-        }
-
-        const audioTotalElem = document.querySelector('#bili-traffic-audio-total');
-        if (audioTotalElem) {
-            audioTotalElem.textContent = totalAudioBytes > 0 ? `/ 全片音频约 ${formatBytes(totalAudioBytes)}` : '';
-        }
-
-        const savedElem = document.querySelector('#bili-traffic-saved');
-        if (savedElem) {
-            savedElem.textContent = formatBytes(effectiveSavedBytes);
-        }
-
-        const videoTotalElem = document.querySelector('#bili-traffic-video-total');
-        if (videoTotalElem) {
-            videoTotalElem.textContent = totalVideoBytes > 0 ? `/ 全片视频约 ${formatBytes(totalVideoBytes)}` : '';
-        }
+        // 大面板已移除流量模块
     }
 
     // 9. 设置音频模式（开/关，精确保留播放进度与播放/暂停状态，支持单视频记忆与全局默认）
@@ -1514,15 +1547,6 @@
                 clearInterval(trafficTimer);
                 trafficTimer = setInterval(() => {
                     if (customAudioEl && !customAudioEl.paused) {
-                        const secUsed = audioBandwidth / 8;
-                        const secSaved = Math.max(0, (videoBandwidth - audioBandwidth) / 8);
-                        totalPlayedSeconds += 1;
-                        currentVideoUsedBytes += secUsed;
-                        currentVideoSavedBytes += secSaved;
-                        updateTrafficDisplay();
-                        if (totalPlayedSeconds % 3 === 0) {
-                            flushCurrentTrafficStats();
-                        }
                         syncAudioProgressToVideoAndStorage(false);
                     }
                 }, 1000);
@@ -1624,8 +1648,7 @@
         if (!audioPanelEl) return;
         const isDark = isBiliDarkMode();
 
-        const panelCard = audioPanelEl.querySelector('#bili-audio-card');
-        const trafficBox = audioPanelEl.querySelector('#bili-traffic-box');
+        const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
         const settingsBox = audioPanelEl.querySelector('#bili-audio-settings-box');
         const playPauseBtn = audioPanelEl.querySelector('#bili-btn-play-pause');
         const audioEl = audioPanelEl.querySelector('#bili-native-audio');
@@ -1642,9 +1665,8 @@
             panelCard.style.boxShadow = isDark ? '0 10px 30px rgba(0,0,0,0.5)' : '0 10px 30px rgba(0,0,0,0.08)';
         }
 
-        if (trafficBox) {
-            trafficBox.style.background = isDark ? '#131416' : '#f6f7f8';
-            trafficBox.style.borderColor = isDark ? 'rgba(255,255,255,0.08)' : '#e3e5e7';
+        if (vinylTitle) {
+            vinylTitle.style.color = isDark ? '#ffffff' : '#18191c';
         }
 
         if (settingsBox) {
@@ -2013,7 +2035,7 @@
                 }
             }
             applyThemeToPanel();
-            updateTrafficDisplay();
+            updateVinylMeta();
             updateCustomPlayerUI();
             return;
         }
@@ -2041,6 +2063,17 @@
                 #bili-audio-download-btn:hover {
                     opacity: 1 !important;
                     background: rgba(127,127,127,0.18) !important;
+                }
+                @keyframes bili-vinyl-spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                .bili-vinyl-disc {
+                    animation: bili-vinyl-spin 20s linear infinite;
+                    animation-play-state: paused;
+                }
+                .bili-vinyl-disc:hover {
+                    filter: brightness(1.06);
                 }
             `;
             document.head.appendChild(styleEl);
@@ -2075,27 +2108,41 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 16px 22px; max-width: 580px; width: 92%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s;">
-                <div style="font-size: 16px; font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-                    <span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频省流模式运行中</span>
-                </div>
-                <div style="font-size: 12px; opacity: 0.65; margin-bottom: 10px;">
-                    视频画面已阻断，仅加载 DASH 音频流
+            <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 14px 22px; max-width: 580px; width: 92%; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s;">
+                <!-- 纯音频模式小标识 -->
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
+                    <span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频模式</span>
+                    <span>•</span>
+                    <span>画面已阻断</span>
                 </div>
 
-                <!-- 流量对比区域 -->
-                <div id="bili-traffic-box" style="width: 100%; border: 1px solid; border-radius: 6px; padding: 8px 14px; margin-bottom: 10px; font-size: 12px; line-height: 1.6; box-sizing: border-box;">
-                    <div id="bili-traffic-rates" style="border-bottom: 1px solid rgba(127,127,127,0.18); padding-bottom: 6px; margin-bottom: 6px;"></div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                        <div style="display: flex; align-items: center; flex-wrap: wrap;">
-                            <span>当前视频已用流量：</span>
-                            <span id="bili-traffic-used" style="font-size: 14px; font-weight: bold; color: #00aeec; margin-left: 2px;">0 B</span>
-                            <span id="bili-traffic-audio-total" style="font-size: 11px; opacity: 0.65; margin-left: 4px;"></span>
-                        </div>
-                        <div style="display: flex; align-items: center; flex-wrap: wrap;">
-                            <span>累计节约流量：</span>
-                            <span id="bili-traffic-saved" style="font-size: 14px; font-weight: bold; color: #4cd964; margin-left: 2px;">0 B</span>
-                            <span id="bili-traffic-video-total" style="font-size: 11px; opacity: 0.65; margin-left: 4px;"></span>
+                <!-- 当前音频/视频标题 -->
+                <div id="bili-vinyl-title" style="font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default;" title="">
+                    Bilibili 纯音频模式
+                </div>
+
+                <!-- 网易云黑胶唱片与留声机唱针交互区 -->
+                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 210px; display: flex; align-items: center; justify-content: center; margin: 4px 0 14px 0; user-select: none;">
+                    <!-- 仿真留声机唱针 -->
+                    <div id="bili-vinyl-needle-wrap" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: rotate(-28deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
+                        <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <!-- 唱针转轴底座 -->
+                            <circle cx="16" cy="16" r="14" fill="#2d3035" stroke="#4b5058" stroke-width="2.5"/>
+                            <circle cx="16" cy="16" r="7" fill="#6b7280"/>
+                            <circle cx="16" cy="16" r="3" fill="#1f2124"/>
+                            <!-- 唱针悬臂杆 -->
+                            <path d="M16 16 L22 72 L16 92" stroke="#d1d5db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                            <!-- 唱头/唱针尖 -->
+                            <rect x="8" y="88" width="16" height="10" rx="2" fill="#1f2124" stroke="#9ca3af" stroke-width="1.5" transform="rotate(-12 16 93)"/>
+                        </svg>
+                    </div>
+
+                    <!-- 实体黑胶唱盘主体（多重同心圆沟槽质感） -->
+                    <div id="bili-vinyl-disc" class="bili-vinyl-disc" style="position: relative; width: 196px; height: 196px; border-radius: 50%; background: repeating-radial-gradient(circle at center, #111111 0, #111111 2px, #222222 3px, #151515 4px, #0d0d0d 6px); box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 3px rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: filter 0.2s ease;" title="点击播放/暂停">
+                        <!-- 黑胶内圈圆形封面 -->
+                        <div id="bili-vinyl-cover" style="width: 122px; height: 122px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid #111111; box-shadow: inset 0 0 10px rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; position: relative;">
+                            <!-- 中心金属轴心孔 -->
+                            <div style="width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #000 0%, #000 30%, #e5e7eb 34%, #9ca3af 65%, #374151 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 2;"></div>
                         </div>
                     </div>
                 </div>
@@ -2268,11 +2315,10 @@
             });
             customAudioEl.addEventListener('loadedmetadata', () => {
                 updateCustomPlayerUI();
-                updateTrafficDisplay();
+                updateVinylMeta();
             });
             customAudioEl.addEventListener('durationchange', () => {
                 updateCustomPlayerUI();
-                updateTrafficDisplay();
             });
             customAudioEl.addEventListener('volumechange', () => {
                 if (!isSyncingVolume) {
@@ -2351,11 +2397,35 @@
             };
         });
 
+        // 黑胶唱盘点击事件：点击黑胶唱盘或封面即可直接切换播放/暂停
+        const vinylDisc = audioPanelEl.querySelector('#bili-vinyl-disc');
+        if (vinylDisc) {
+            vinylDisc.onclick = () => {
+                if (!customAudioEl) return;
+                if (pauseDebounceTimer) {
+                    clearTimeout(pauseDebounceTimer);
+                    pauseDebounceTimer = null;
+                }
+                if (seekSettleTimer) {
+                    clearTimeout(seekSettleTimer);
+                    seekSettleTimer = null;
+                }
+                isSeekingOperation = false;
+
+                if (customAudioEl.paused) {
+                    customAudioEl.play().catch(() => {});
+                } else {
+                    customAudioEl.pause();
+                }
+                updatePlayPauseBtnState(true);
+            };
+        }
+
         bindCustomPlayerControls();
         updateCustomPlayerUI();
         renderQualityButtons();
         applyThemeToPanel();
-        updateTrafficDisplay();
+        updateVinylMeta();
     }
 
     // 13. 挂载按钮至播放器底部控制栏（完全采用原生倍速/清晰度相同结构，无缝融入底栏，无悬停菜单）
@@ -2497,6 +2567,7 @@
                 }
             }
             updateMemoryStatusDisplay();
+            updateVinylMeta();
         };
 
         checkPageChange = () => {
