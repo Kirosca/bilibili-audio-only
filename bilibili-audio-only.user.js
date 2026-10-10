@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.2.0
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.2.1
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），黑胶唱盘及封面轴孔全面启用 clip-path: circle 与强制最高优先级圆角保护（彻底杜绝其他第三方插件暴力直角化篡改为方形），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -110,10 +110,7 @@
             const saved = localStorage.getItem(STORAGE_KEY_USER_MUTED);
             if (saved !== null) return saved === 'true';
         } catch {}
-        try {
-            const profile = JSON.parse(localStorage.getItem('bpx_player_profile') || '{}');
-            if (typeof profile.muted === 'boolean') return profile.muted;
-        } catch {}
+        // 用户从未在大面板显式静音过，坚决不静音（杜绝被 B 站无交互 Autoplay 策略或临时防串音误导）
         return false;
     }
 
@@ -123,17 +120,12 @@
         try {
             isSyncingVolume = true;
             const savedVol = getSavedUserVolume();
-            // 防假象 1.0 冲刷：当原视频为浏览器默认 1.0 且处于未充分初始化状态（readyState <= 1），但本地有更可信的历史音量时，优先保护
-            if (origVideo.volume === 1 && savedVol < 0.95 && origVideo.readyState <= 1) {
-                origVideo.volume = savedVol;
-                customAudioEl.volume = savedVol;
-                customAudioEl.muted = getSavedUserMuted();
-                return;
-            }
+            const savedMuted = getSavedUserMuted();
 
-            customAudioEl.volume = origVideo.volume;
-            customAudioEl.muted = origVideo.muted;
-            saveUserVolume(origVideo.volume, origVideo.muted);
+            // 若原视频已被系统级静音（例如换视频防串音或无手势 Autoplay），坚决不采信原视频的静音状态
+            let vol = (typeof origVideo.volume === 'number' && origVideo.volume > 0) ? origVideo.volume : savedVol;
+            customAudioEl.volume = vol;
+            customAudioEl.muted = savedMuted;
         } catch {} finally {
             isSyncingVolume = false;
         }
@@ -144,17 +136,11 @@
         if (!origVideo || !customAudioEl || isSyncingVolume) return;
         try {
             isSyncingVolume = true;
-            const savedVol = getSavedUserVolume();
-            // 防假象 1.0 倒灌：若音频为默认 1.0 但本地有较低历史音量，且音频尚未被用户显式调整
-            if (customAudioEl.volume === 1 && savedVol < 0.95 && (!customAudioEl.currentTime || customAudioEl.currentTime < 1)) {
-                customAudioEl.volume = savedVol;
-                origVideo.volume = savedVol;
-                origVideo.muted = getSavedUserMuted();
-                return;
-            }
-
             origVideo.volume = customAudioEl.volume;
-            origVideo.muted = customAudioEl.muted;
+            // 仅在非音频模式（或切回看视频）时才将静音状态同步给原视频
+            if (!isAudioMode) {
+                origVideo.muted = customAudioEl.muted;
+            }
             saveUserVolume(customAudioEl.volume, customAudioEl.muted);
         } catch {} finally {
             isSyncingVolume = false;
@@ -376,13 +362,8 @@
         video._biliAudioBound = true;
 
         video.addEventListener('volumechange', () => {
-            if (!isSyncingVolume) {
-                if (isAudioMode) {
-                    syncVolumeVideoToAudio();
-                } else {
-                    saveUserVolume(video.volume, video.muted);
-                }
-            }
+            if (isSyncingVolume || isAudioMode) return;
+            saveUserVolume(video.volume, video.muted);
         });
 
         // 原生播放器加载新流时，主动触发视频切换检测
@@ -1345,8 +1326,15 @@
                         customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
                     }
                 }
+                // 确保新视频换源起播时音量与静音状态受用户真实配置保护，杜绝由于系统换源阶段而残留静音
+                customAudioEl.muted = getSavedUserMuted();
+                const curUserVol = getSavedUserVolume();
+                if (customAudioEl.volume === 0 && curUserVol > 0) {
+                    customAudioEl.volume = curUserVol;
+                }
                 customAudioEl.play().catch(() => {});
                 updatePlayPauseBtnState(true);
+                updateCustomPlayerUI();
 
                 if (origVideo) {
                     origVideo.style.visibility = 'hidden';
@@ -2875,8 +2863,14 @@
                     if (customAudioEl.src !== currentAudioUrl) {
                         customAudioEl.src = currentAudioUrl;
                     }
+                    customAudioEl.muted = getSavedUserMuted();
+                    const curUserVol = getSavedUserVolume();
+                    if (customAudioEl.volume === 0 && curUserVol > 0) {
+                        customAudioEl.volume = curUserVol;
+                    }
                     customAudioEl.play().catch(() => {});
                     updatePlayPauseBtnState(true);
+                    updateCustomPlayerUI();
                 }
             } else {
                 if (isAudioMode) {
