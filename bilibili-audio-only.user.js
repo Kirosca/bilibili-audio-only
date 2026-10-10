@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.4
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增当前视频已用流量实时精准统计，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.5
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增当前视频已用流量与节约流量本地持久化存储（刷新页面不丢失），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -22,6 +22,8 @@
     let audioBandwidth = 132000;   // 默认 bps
     let videoBandwidth = 2800000;  // 默认 bps
     let totalPlayedSeconds = 0;
+    let currentVideoUsedBytes = 0;
+    let currentVideoSavedBytes = 0;
     let trafficTimer = null;
 
     let availableAudioTracks = [];
@@ -449,6 +451,7 @@
             if (isSeekingOperation || !customAudioEl || customAudioEl.seeking || !customAudioEl.paused) {
                 return;
             }
+            flushCurrentTrafficStats();
             updatePlayPauseBtnState();
         }, 120);
     }
@@ -571,6 +574,80 @@
             return { active: mem, source: 'memory' };
         }
         return { active: getGlobalDefault(), source: 'default' };
+    }
+
+    // 流量统计持久化管理（LRU 上限 500）
+    const STORAGE_KEY_TRAFFIC_STATS = 'bili_audio_traffic_stats_v1';
+    const MAX_TRAFFIC_LIMIT = 500;
+
+    function loadTrafficStatsList() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_TRAFFIC_STATS);
+            if (!raw) return [];
+            const list = JSON.parse(raw);
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveTrafficStatsList(list) {
+        try {
+            localStorage.setItem(STORAGE_KEY_TRAFFIC_STATS, JSON.stringify(list.slice(0, MAX_TRAFFIC_LIMIT)));
+        } catch {}
+    }
+
+    function loadVideoTrafficStats(videoKey) {
+        if (!videoKey) return { seconds: 0, usedBytes: 0, savedBytes: 0 };
+        const list = loadTrafficStatsList();
+        const item = list.find(entry => entry.key === videoKey);
+        if (!item) return { seconds: 0, usedBytes: 0, savedBytes: 0 };
+
+        const sec = typeof item.seconds === 'number' && item.seconds >= 0 ? item.seconds : 0;
+        const used = typeof item.usedBytes === 'number' && item.usedBytes >= 0
+            ? item.usedBytes
+            : Math.round((audioBandwidth / 8) * sec);
+        const saved = typeof item.savedBytes === 'number' && item.savedBytes >= 0
+            ? item.savedBytes
+            : Math.round(Math.max(0, (videoBandwidth - audioBandwidth) / 8 * sec));
+
+        return { seconds: sec, usedBytes: used, savedBytes: saved };
+    }
+
+    function saveVideoTrafficStats(videoKey, stats) {
+        if (!videoKey || !stats) return;
+        const list = loadTrafficStatsList();
+        const idx = list.findIndex(entry => entry.key === videoKey);
+        if (idx !== -1) {
+            list.splice(idx, 1);
+        }
+        list.unshift({
+            key: videoKey,
+            seconds: Math.floor(stats.seconds || 0),
+            usedBytes: Math.round(stats.usedBytes || 0),
+            savedBytes: Math.round(stats.savedBytes || 0),
+            updatedAt: Date.now()
+        });
+        saveTrafficStatsList(list);
+    }
+
+    function flushCurrentTrafficStats(targetKey = getVideoKey()) {
+        if (!targetKey) return;
+        if (currentVideoUsedBytes > 0 || currentVideoSavedBytes > 0 || totalPlayedSeconds > 0) {
+            saveVideoTrafficStats(targetKey, {
+                seconds: totalPlayedSeconds,
+                usedBytes: currentVideoUsedBytes,
+                savedBytes: currentVideoSavedBytes
+            });
+        }
+    }
+
+    function restoreTrafficStatsForCurrentVideo(targetKey = getVideoKey()) {
+        const stats = loadVideoTrafficStats(targetKey);
+        totalPlayedSeconds = stats.seconds;
+        currentVideoUsedBytes = stats.usedBytes;
+        currentVideoSavedBytes = stats.savedBytes;
+        updateTrafficDisplay();
     }
 
     // 1. 判断是否为暗黑模式（优先读取 B 站 Cookie: theme_style）
@@ -1124,8 +1201,12 @@
         const savedPercent = Math.max(0, ((videoBandwidth - audioBandwidth) / videoBandwidth * 100)).toFixed(1);
         const videoRate = (videoBandwidth / 8 / 1024).toFixed(0);
         const audioRate = (audioBandwidth / 8 / 1024).toFixed(0);
-        const totalUsedBytes = (audioBandwidth / 8) * totalPlayedSeconds;
-        const totalSavedBytes = Math.max(0, (videoBandwidth - audioBandwidth) / 8 * totalPlayedSeconds);
+        const effectiveUsedBytes = currentVideoUsedBytes > 0
+            ? currentVideoUsedBytes
+            : (audioBandwidth / 8) * totalPlayedSeconds;
+        const effectiveSavedBytes = currentVideoSavedBytes > 0
+            ? currentVideoSavedBytes
+            : Math.max(0, (videoBandwidth - audioBandwidth) / 8 * totalPlayedSeconds);
 
         const rateElem = document.querySelector('#bili-traffic-rates');
         if (rateElem) {
@@ -1140,12 +1221,12 @@
 
         const usedElem = document.querySelector('#bili-traffic-used');
         if (usedElem) {
-            usedElem.textContent = formatBytes(totalUsedBytes);
+            usedElem.textContent = formatBytes(effectiveUsedBytes);
         }
 
         const savedElem = document.querySelector('#bili-traffic-saved');
         if (savedElem) {
-            savedElem.textContent = formatBytes(totalSavedBytes);
+            savedElem.textContent = formatBytes(effectiveSavedBytes);
         }
     }
 
@@ -1265,12 +1346,20 @@
                 clearInterval(trafficTimer);
                 trafficTimer = setInterval(() => {
                     if (customAudioEl && !customAudioEl.paused) {
+                        const secUsed = audioBandwidth / 8;
+                        const secSaved = Math.max(0, (videoBandwidth - audioBandwidth) / 8);
                         totalPlayedSeconds += 1;
+                        currentVideoUsedBytes += secUsed;
+                        currentVideoSavedBytes += secSaved;
                         updateTrafficDisplay();
+                        if (totalPlayedSeconds % 3 === 0) {
+                            flushCurrentTrafficStats();
+                        }
                     }
                 }, 1000);
             } else {
                 // 切换回【看视频】：平滑接力回原视频画面与声音
+                flushCurrentTrafficStats();
                 const curTime = customAudioEl && Number.isFinite(customAudioEl.currentTime) ? customAudioEl.currentTime : 0;
                 const shouldPlay = customAudioEl ? !customAudioEl.paused : false;
 
@@ -2126,6 +2215,14 @@
 
         // 监听 SPA 换 P / 换视频，按新视频逻辑独立判断
         let lastVideoKey = getVideoKey();
+        restoreTrafficStatsForCurrentVideo(lastVideoKey);
+
+        window.addEventListener('beforeunload', () => {
+            flushCurrentTrafficStats();
+        });
+        window.addEventListener('pagehide', () => {
+            flushCurrentTrafficStats();
+        });
 
         const handleVideoChange = () => {
             const currentKey = getVideoKey();
@@ -2165,9 +2262,8 @@
                 currentAudioUrl = null;
                 availableAudioTracks = [];
                 currentAudioQualityId = null;
-                totalPlayedSeconds = 0;
+                restoreTrafficStatsForCurrentVideo(currentKey);
                 renderQualityButtons();
-                updateTrafficDisplay();
 
                 // 尝试从音轨缓存池中瞬时命中提前返回的新视频音轨
                 const currentId = getCurrentVideoIdentity();
@@ -2220,6 +2316,7 @@
         checkPageChange = () => {
             const currentKey = getVideoKey();
             if (currentKey !== lastVideoKey) {
+                flushCurrentTrafficStats(lastVideoKey);
                 lastVideoKey = currentKey;
                 handleVideoChange();
             }
