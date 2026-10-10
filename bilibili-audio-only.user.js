@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.7
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，黑胶大面板深度对齐视频窗口0.7黄金比例并精调黑胶唱盘尺寸为原尺寸的0.7倍（留声机唱针与封面等比级联缩放，兼具视效精致与呼吸留白，杜绝纵向溢出滚动），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.8
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，大面板外框宽高显式锁定为视频窗口的0.7黄金比例（黑胶唱盘按0.7倍精致缩小居中展示，面板整体宽高恒定不塌陷，视觉饱满兼具呼吸留白，杜绝纵向溢出滚动），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1766,7 +1766,6 @@
         if (w <= 0 || h <= 0) return;
 
         // 1. 卡片宽度与比例：严格对齐视频窗口的 0.7（70%）比例
-        // 紧凑窄窗（w < 560）时保底 460px（或 92%）以容纳控制条与倍速，宽屏大屏下充分展开至 0.7 比例（上限 980px）
         let targetCardW = Math.round(w * 0.7);
         if (w < 560) {
             targetCardW = Math.min(Math.round(w * 0.94), 460);
@@ -1774,30 +1773,24 @@
             targetCardW = 980;
         }
 
-        // 2. 卡片高度与黑胶唱盘：按视频窗口高度的 0.7 比例黄金舒展
-        // 预估卡片除唱盘外的固定控件总高度（纯音频标识+标题+进度条+音量+倍速音质+主控按钮+上下内边距与间距）
+        // 2. 卡片高度：严格锁定为视频窗口高度的 0.7（70%）比例，绝对不随黑胶变小而塌陷缩水
+        let targetCardH = Math.round(h * 0.7);
+        const minRequiredH = 260;
+        targetCardH = Math.max(minRequiredH, Math.min(Math.round(h - 18), targetCardH));
+
+        // 3. 黑胶唱盘尺寸计算：
         const isCompactHeight = h < 400;
         const isSpaciousHeight = h >= 640;
         const reservedControlsH = isCompactHeight ? 140 : (isSpaciousHeight ? 175 : 158);
 
-        // 由 0.7 比例推导黑胶唱盘目标直径
-        const targetCardH = Math.round(h * 0.7);
-        let discSize = Math.round(targetCardH - reservedControlsH);
-
-        // 结合卡片宽度约束（唱盘直径不超过卡片宽度的 46%）
+        // 基础唱盘尺寸（在 0.7 面板高度下的标准参考尺寸）
+        let baseDiscSize = Math.round(targetCardH - reservedControlsH);
         const maxDiscByWidth = Math.round(targetCardW * 0.46);
-        discSize = Math.min(discSize, maxDiscByWidth);
+        baseDiscSize = Math.min(baseDiscSize, maxDiscByWidth);
+        baseDiscSize = Math.max(120, Math.min(340, baseDiscSize));
 
-        // 设定唱盘合理区间：极限小窗保底 120px，在宽屏/全屏下可达 320px~340px，充分展现 0.7 比例的沉浸大气
-        discSize = Math.max(120, Math.min(340, discSize));
-
-        // 绝对安全守卫：确保卡片总高度不超过视口高度的 90%，彻底杜绝纵向溢出滚动
-        if (discSize + reservedControlsH > h - 18) {
-            discSize = Math.max(110, Math.round(h - 18 - reservedControlsH));
-        }
-
-        // 黑胶唱盘大小乘 0.7（其他元素与卡片尺寸严格保持不变）
-        discSize = Math.max(90, Math.round(discSize * 0.7));
+        // 黑胶唱盘大小乘 0.7（其他元素与卡片高度/宽度严格保持不变，卡片内设弹性垂直留白居中）
+        let discSize = Math.max(90, Math.round(baseDiscSize * 0.7));
 
         const coverSize = Math.round(discSize * 0.622);
         const centerSize = Math.max(14, Math.round(discSize * 0.102));
@@ -1805,7 +1798,7 @@
         const wrapW = discSize + 24;
         const wrapH = discSize + 6;
 
-        // 3. 内边距与文字按钮尺寸适配
+        // 4. 内边距与文字按钮尺寸适配
         const cardPadding = isCompactHeight ? '8px 16px' : (isSpaciousHeight ? '16px 26px' : '12px 20px');
         const titleFontSize = isCompactHeight ? '14px' : (isSpaciousHeight ? '16px' : '15px');
         const ctrlBtnPadding = isCompactHeight ? '5px 14px' : (isSpaciousHeight ? '7px 20px' : '6px 18px');
@@ -1813,10 +1806,13 @@
         const rateBtnPadding = isCompactHeight ? '2px 6px' : (isSpaciousHeight ? '4px 8px' : '3px 7px');
         const rateBtnFontSize = isCompactHeight ? '10.5px' : (isSpaciousHeight ? '12px' : '11px');
 
-        // 4. 应用至卡片 DOM
+        // 5. 应用至卡片 DOM（显式绑定宽度与高度为 0.7 比例，绝不塌陷）
         panelCard.style.width = `${Math.min(94, Math.max(70, Math.round(targetCardW / w * 100)))}%`;
         panelCard.style.maxWidth = `${targetCardW}px`;
+        panelCard.style.height = `${targetCardH}px`;
+        panelCard.style.minHeight = `${targetCardH}px`;
         panelCard.style.padding = cardPadding;
+        panelCard.style.justifyContent = 'space-between';
 
         const titleEl = panelCard.querySelector('#bili-vinyl-title');
         if (titleEl) {
@@ -1827,8 +1823,12 @@
         const vinylWrap = panelCard.querySelector('#bili-vinyl-wrap');
         if (vinylWrap) {
             vinylWrap.style.width = `${wrapW}px`;
-            vinylWrap.style.height = `${wrapH}px`;
-            vinylWrap.style.margin = isCompactHeight ? '0 0 4px 0' : '2px 0 8px 0';
+            vinylWrap.style.minHeight = `${wrapH}px`;
+            vinylWrap.style.flex = '1';
+            vinylWrap.style.display = 'flex';
+            vinylWrap.style.alignItems = 'center';
+            vinylWrap.style.justifyContent = 'center';
+            vinylWrap.style.margin = '2px 0';
         }
 
         const vinylDisc = panelCard.querySelector('#bili-vinyl-disc');
@@ -2213,7 +2213,7 @@
                 #bili-audio-card {
                     max-height: calc(100% - 16px);
                     box-sizing: border-box;
-                    transition: max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+                    transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
                 }
                 #bili-vinyl-wrap, #bili-vinyl-disc, #bili-vinyl-cover, #bili-vinyl-center-hole {
                     transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1);
