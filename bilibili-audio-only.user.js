@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.0.3
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.0.4
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，自动提取B站视频封面与曲目标题，黑胶播放卡片全面实现基于播放器父元素尺寸自适应响应式设计（根据视口宽高动态计算黑胶唱片最佳直径与留白，彻底根除纵向溢出滚动，完美兼容紧凑/标准/宽屏/全屏沉浸播放），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1457,6 +1457,7 @@
 
                 if (audioPanelEl) {
                     audioPanelEl.style.display = 'flex';
+                    updateAudioCardResponsiveSize();
                 }
 
                 // 立即隐藏原视频画面（覆盖式置顶），但若原视频正在播放，先不强制中断，等待音频出声平滑接力
@@ -1712,6 +1713,7 @@
         });
 
         updateMemoryStatusDisplay();
+        updateAudioCardResponsiveSize();
     }
 
     // 11. 更新设置与记忆状态展示（仅驱动大面板中的设置与状态）
@@ -1748,7 +1750,179 @@
         }
     }
 
-    // 12. 获取音频面板的安全挂载目标容器与插入位置（彻底避免父子节点不匹配异常）
+    // 12. 根据父元素视口动态自适应卡片与黑胶唱盘尺寸（彻底避免纵向溢出滚动，全窗口级别黄金比例呈现）
+    let panelResizeObserver = null;
+    function updateAudioCardResponsiveSize() {
+        if (!audioPanelEl) return;
+        const panelCard = audioPanelEl.querySelector('#bili-audio-card');
+        if (!panelCard) return;
+
+        // 获取父容器有效视口宽度与高度
+        const rect = audioPanelEl.getBoundingClientRect();
+        const parentW = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientWidth : 0);
+        const parentH = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientHeight : 0);
+        const w = Math.round(rect.width || audioPanelEl.clientWidth || parentW || window.innerWidth);
+        const h = Math.round(rect.height || audioPanelEl.clientHeight || parentH || window.innerHeight);
+        if (w <= 0 || h <= 0) return;
+
+        // 1. 核心推导：根据父元素可用高度与宽度动态计算黑胶唱盘最佳直径 D
+        // 目标：卡片总高保持在 (h - 20px) 以内，保证上下安全留白，彻底根除任何溢出滚动条
+        let discSize = 176;
+        let isCompact = false;
+        let isLarge = false;
+
+        if (h < 360 || w < 500) {
+            // 超紧凑模式（小窗、分屏、或标准笔记本低高度视口）
+            isCompact = true;
+            discSize = Math.max(96, Math.min(120, Math.round(h * 0.32)));
+        } else if (h < 460) {
+            // 紧凑/标准模式（典型 16:9 播放器窗口，高度 360px~450px）
+            discSize = Math.max(120, Math.min(156, Math.round(h * 0.34)));
+        } else if (h < 650) {
+            // 宽屏模式（视口高度 460px~640px）
+            discSize = Math.max(156, Math.min(196, Math.round(h * 0.32)));
+        } else {
+            // 大屏/全屏沉浸模式（视口高度 >= 650px 且宽度充足）
+            isLarge = w >= 900;
+            discSize = isLarge ? Math.max(200, Math.min(236, Math.round(h * 0.28))) : 196;
+        }
+
+        const coverSize = Math.round(discSize * 0.622);
+        const centerSize = Math.max(14, Math.round(discSize * 0.102));
+        const needleScale = Number((discSize / 196).toFixed(3));
+        const wrapW = discSize + 24;
+        const wrapH = discSize + 6;
+
+        // 2. 根据父元素尺寸计算卡片最大宽度、内边距与字体控件尺寸
+        let maxCardW = 580;
+        let cardPadding = '12px 20px';
+        let titleFontSize = '15px';
+        let ctrlBtnPadding = '6px 18px';
+        let ctrlBtnFontSize = '13px';
+        let rateBtnPadding = '3px 7px';
+        let rateBtnFontSize = '11px';
+
+        if (isCompact) {
+            maxCardW = Math.min(440, Math.round(w * 0.94));
+            cardPadding = '8px 14px';
+            titleFontSize = '13px';
+            ctrlBtnPadding = '4px 12px';
+            ctrlBtnFontSize = '12px';
+            rateBtnPadding = '2px 5px';
+            rateBtnFontSize = '10px';
+        } else if (isLarge) {
+            maxCardW = Math.min(660, Math.round(w * 0.72));
+            cardPadding = '16px 26px';
+            titleFontSize = '16px';
+            ctrlBtnPadding = '7px 20px';
+            ctrlBtnFontSize = '14px';
+            rateBtnPadding = '3px 8px';
+            rateBtnFontSize = '11px';
+        } else if (h < 460) {
+            maxCardW = Math.min(520, Math.round(w * 0.9));
+            cardPadding = '10px 16px';
+            titleFontSize = '14px';
+            ctrlBtnPadding = '5px 15px';
+            ctrlBtnFontSize = '13px';
+            rateBtnPadding = '2px 6px';
+            rateBtnFontSize = '11px';
+        } else {
+            maxCardW = Math.min(580, Math.round(w * 0.88));
+            cardPadding = '12px 20px';
+        }
+
+        // 3. 应用至卡片 DOM
+        panelCard.style.maxWidth = `${maxCardW}px`;
+        panelCard.style.padding = cardPadding;
+
+        const titleEl = panelCard.querySelector('#bili-vinyl-title');
+        if (titleEl) {
+            titleEl.style.fontSize = titleFontSize;
+            titleEl.style.marginBottom = isCompact ? '2px' : '4px';
+        }
+
+        const vinylWrap = panelCard.querySelector('#bili-vinyl-wrap');
+        if (vinylWrap) {
+            vinylWrap.style.width = `${wrapW}px`;
+            vinylWrap.style.height = `${wrapH}px`;
+            vinylWrap.style.margin = isCompact ? '0 0 4px 0' : (h < 460 ? '2px 0 6px 0' : '2px 0 10px 0');
+        }
+
+        const vinylDisc = panelCard.querySelector('#bili-vinyl-disc');
+        if (vinylDisc) {
+            vinylDisc.style.width = `${discSize}px`;
+            vinylDisc.style.height = `${discSize}px`;
+        }
+
+        const vinylCover = panelCard.querySelector('#bili-vinyl-cover');
+        if (vinylCover) {
+            vinylCover.style.width = `${coverSize}px`;
+            vinylCover.style.height = `${coverSize}px`;
+        }
+
+        const centerHole = panelCard.querySelector('#bili-vinyl-center-hole');
+        if (centerHole) {
+            centerHole.style.width = `${centerSize}px`;
+            centerHole.style.height = `${centerSize}px`;
+        }
+
+        const needleScaler = panelCard.querySelector('#bili-vinyl-needle-scaler');
+        if (needleScaler) {
+            const needleLeft = Math.round(discSize / 2 + 12 - 2 * needleScale);
+            const needleTop = Math.round(-16 * needleScale);
+            needleScaler.style.left = `${needleLeft}px`;
+            needleScaler.style.top = `${needleTop}px`;
+            needleScaler.style.transform = `scale(${needleScale})`;
+        }
+
+        // 主控播放/暂停与恢复视频按钮尺寸
+        panelCard.querySelectorAll('#bili-btn-play-pause, #bili-btn-restore').forEach(btn => {
+            btn.style.padding = ctrlBtnPadding;
+            btn.style.fontSize = ctrlBtnFontSize;
+        });
+
+        // 倍速按钮尺寸
+        panelCard.querySelectorAll('.bili-rate-btn').forEach(btn => {
+            btn.style.padding = rateBtnPadding;
+            btn.style.fontSize = rateBtnFontSize;
+        });
+
+        // 底部居中按钮组与右下角小开关防重叠适配
+        const bottomCtrlWrap = panelCard.querySelector('#bili-audio-bottom-bar');
+        const settingsBox = panelCard.querySelector('#bili-audio-settings-box');
+        if (bottomCtrlWrap && settingsBox) {
+            if (w < 480) {
+                bottomCtrlWrap.style.flexDirection = 'column';
+                bottomCtrlWrap.style.gap = '6px';
+                settingsBox.style.position = 'static';
+                settingsBox.style.alignItems = 'center';
+            } else {
+                bottomCtrlWrap.style.flexDirection = 'row';
+                bottomCtrlWrap.style.gap = '0px';
+                settingsBox.style.position = 'absolute';
+                settingsBox.style.right = '0';
+                settingsBox.style.bottom = '0';
+                settingsBox.style.alignItems = 'flex-end';
+            }
+        }
+    }
+
+    function setupPanelResizeObserver() {
+        if (!audioPanelEl || typeof ResizeObserver === 'undefined') return;
+        if (panelResizeObserver) {
+            panelResizeObserver.disconnect();
+            panelResizeObserver = null;
+        }
+        panelResizeObserver = new ResizeObserver(() => {
+            updateAudioCardResponsiveSize();
+        });
+        panelResizeObserver.observe(audioPanelEl);
+        if (audioPanelEl.parentElement) {
+            panelResizeObserver.observe(audioPanelEl.parentElement);
+        }
+    }
+
+    // 13. 获取音频面板的安全挂载目标容器与插入位置（彻底避免父子节点不匹配异常）
     function getPlayerMountTarget() {
         // 1. 首选视频主视口容器（彻底覆盖视频画面与弹幕，位于底栏上方，绝不在 video 内部）
         const primary = document.querySelector('.bpx-player-primary-area');
@@ -2039,6 +2213,8 @@
             applyThemeToPanel();
             updateVinylMeta();
             updateCustomPlayerUI();
+            setupPanelResizeObserver();
+            updateAudioCardResponsiveSize();
             return;
         }
 
@@ -2050,6 +2226,17 @@
                     display: none !important;
                     width: 0 !important;
                     height: 0 !important;
+                }
+                #bili-audio-card {
+                    max-height: calc(100% - 16px);
+                    box-sizing: border-box;
+                    transition: max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+                }
+                #bili-vinyl-wrap, #bili-vinyl-disc, #bili-vinyl-cover, #bili-vinyl-center-hole {
+                    transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), height 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                #bili-vinyl-needle-scaler {
+                    transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
                 }
                 .bili-slider-wrap:hover .bili-slider-track {
                     height: 7px !important;
@@ -2094,12 +2281,12 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            overflow-y: auto;
+            overflow: hidden;
             scrollbar-width: none;
             -ms-overflow-style: none;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             box-sizing: border-box;
-            padding: 12px;
+            padding: 10px;
         `;
 
         // 核心防护：拦截并阻断大面板上所有的点击与指针事件向底层冒泡，彻底杜绝误触发原视频播放/暂停
@@ -2125,18 +2312,20 @@
 
                 <!-- 网易云黑胶唱片与留声机唱针交互区 -->
                 <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
-                    <!-- 仿真留声机唱针 -->
-                    <div id="bili-vinyl-needle-wrap" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: rotate(-28deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
-                        <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <!-- 唱针转轴底座 -->
-                            <circle cx="16" cy="16" r="14" fill="#2d3035" stroke="#4b5058" stroke-width="2.5"/>
-                            <circle cx="16" cy="16" r="7" fill="#6b7280"/>
-                            <circle cx="16" cy="16" r="3" fill="#1f2124"/>
-                            <!-- 唱针悬臂杆 -->
-                            <path d="M16 16 L22 72 L16 92" stroke="#d1d5db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                            <!-- 唱头/唱针尖 -->
-                            <rect x="8" y="88" width="16" height="10" rx="2" fill="#1f2124" stroke="#9ca3af" stroke-width="1.5" transform="rotate(-12 16 93)"/>
-                        </svg>
+                    <!-- 仿真留声机唱针缩放定位容器 -->
+                    <div id="bili-vinyl-needle-scaler" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: scale(1); transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);">
+                        <div id="bili-vinyl-needle-wrap" style="width: 44px; height: 102px; transform-origin: 16px 16px; transform: rotate(-28deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
+                            <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <!-- 唱针转轴底座 -->
+                                <circle cx="16" cy="16" r="14" fill="#2d3035" stroke="#4b5058" stroke-width="2.5"/>
+                                <circle cx="16" cy="16" r="7" fill="#6b7280"/>
+                                <circle cx="16" cy="16" r="3" fill="#1f2124"/>
+                                <!-- 唱针悬臂杆 -->
+                                <path d="M16 16 L22 72 L16 92" stroke="#d1d5db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <!-- 唱头/唱针尖 -->
+                                <rect x="8" y="88" width="16" height="10" rx="2" fill="#1f2124" stroke="#9ca3af" stroke-width="1.5" transform="rotate(-12 16 93)"/>
+                            </svg>
+                        </div>
                     </div>
 
                     <!-- 实体黑胶唱盘主体（多重同心圆沟槽质感） -->
@@ -2144,7 +2333,7 @@
                         <!-- 黑胶内圈圆形封面 -->
                         <div id="bili-vinyl-cover" style="width: 122px; height: 122px; border-radius: 50%; background-size: cover; background-position: center; border: 3px solid #111111; box-shadow: inset 0 0 10px rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; position: relative;">
                             <!-- 中心金属轴心孔 -->
-                            <div style="width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #000 0%, #000 30%, #e5e7eb 34%, #9ca3af 65%, #374151 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 2;"></div>
+                            <div id="bili-vinyl-center-hole" style="width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #000 0%, #000 30%, #e5e7eb 34%, #9ca3af 65%, #374151 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 2;"></div>
                         </div>
                     </div>
                 </div>
@@ -2209,7 +2398,7 @@
                 </div>
 
                 <!-- 底部操作区（居中主控按钮 + 右下角微型开关组） -->
-                <div style="width: 100%; display: flex; justify-content: center; align-items: center; position: relative; margin-top: 2px;">
+                <div id="bili-audio-bottom-bar" style="width: 100%; display: flex; justify-content: center; align-items: center; position: relative; margin-top: 2px;">
                     <!-- 居中播放/暂停与恢复视频 -->
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <button id="bili-btn-play-pause" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
@@ -2426,9 +2615,11 @@
         renderQualityButtons();
         applyThemeToPanel();
         updateVinylMeta();
+        setupPanelResizeObserver();
+        updateAudioCardResponsiveSize();
     }
 
-    // 13. 挂载按钮至播放器底部控制栏（完全采用原生倍速/清晰度相同结构，无缝融入底栏，无悬停菜单）
+    // 14. 挂载按钮至播放器底部控制栏（完全采用原生倍速/清晰度相同结构，无缝融入底栏，无悬停菜单）
     function mountToggleButton() {
         const controlRight = document.querySelector('.bpx-player-control-bottom-right, .bilibili-player-video-control-bottom-right');
         if (!controlRight) return;
@@ -2671,6 +2862,13 @@
                 setAudioMode(!isAudioMode, true);
             }
         }, true);
+
+        // 视口尺寸变化兜底自适应驱动
+        window.addEventListener('resize', () => {
+            if (isAudioMode) {
+                updateAudioCardResponsiveSize();
+            }
+        });
     }
 
     if (document.readyState === 'loading') {
