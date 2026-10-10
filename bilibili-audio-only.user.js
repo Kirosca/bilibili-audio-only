@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.1
-// @description  一键切换纯音频省流量模式，多档音频品质双缓冲无缝切换，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.2
+// @description  一键切换纯音频省流量模式，多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -609,6 +609,178 @@
         return true;
     }
 
+    // 音频流数据缓存池：按 bvid, cid 或组合键映射保存解析后的可用音轨与码率，防串音并支持瞬时命中
+    const audioDataCache = new Map();
+    const MAX_CACHE_ENTRIES = 50;
+
+    function saveToAudioCache(identity, tracks, vidBandwidth) {
+        if (!tracks || tracks.length === 0 || !identity) return;
+        const entry = {
+            tracks,
+            videoBandwidth: vidBandwidth || 0,
+            bvid: identity.bvid,
+            cid: identity.cid,
+            epId: identity.epId,
+            timestamp: Date.now()
+        };
+
+        if (identity.bvid && identity.cid) {
+            audioDataCache.set(`${identity.bvid}:${identity.cid}`, entry);
+        }
+        if (identity.bvid) {
+            audioDataCache.set(`bvid:${identity.bvid}`, entry);
+        }
+        if (identity.cid) {
+            audioDataCache.set(`cid:${identity.cid}`, entry);
+        }
+        if (identity.epId) {
+            audioDataCache.set(`ep:${identity.epId}`, entry);
+        }
+
+        while (audioDataCache.size > MAX_CACHE_ENTRIES) {
+            const firstKey = audioDataCache.keys().next().value;
+            audioDataCache.delete(firstKey);
+        }
+    }
+
+    function getFromAudioCache(identity) {
+        if (!identity) return null;
+        if (identity.bvid && identity.cid) {
+            const hit = audioDataCache.get(`${identity.bvid}:${identity.cid}`);
+            if (hit) return hit;
+        }
+        if (identity.epId) {
+            const hit = audioDataCache.get(`ep:${identity.epId}`);
+            if (hit) return hit;
+        }
+        if (identity.cid) {
+            const hit = audioDataCache.get(`cid:${identity.cid}`);
+            if (hit) return hit;
+        }
+        if (identity.bvid) {
+            const hit = audioDataCache.get(`bvid:${identity.bvid}`);
+            if (hit) {
+                if (identity.cid && hit.cid && hit.cid !== identity.cid) {
+                    return null;
+                }
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    // 获取当前播放器/主页面正在播放的视频身份
+    function getCurrentVideoIdentity() {
+        let bvid = null;
+        let cid = null;
+        let epId = null;
+
+        try {
+            if (window.player) {
+                if (typeof window.player.getBvid === 'function') bvid = window.player.getBvid();
+                if (typeof window.player.getCid === 'function') cid = window.player.getCid();
+            }
+        } catch {}
+
+        if (!bvid) {
+            const bvidMatch = location.pathname.match(/\/(BV[a-zA-Z0-9]+)/i);
+            if (bvidMatch) {
+                bvid = bvidMatch[1];
+            } else {
+                const sp = new URLSearchParams(location.search);
+                if (sp.has('bvid')) bvid = sp.get('bvid');
+            }
+        }
+
+        if (!cid) {
+            const sp = new URLSearchParams(location.search);
+            if (sp.has('cid')) cid = sp.get('cid');
+        }
+
+        const epMatch = location.pathname.match(/\/(ep\d+)/i);
+        if (epMatch) {
+            epId = epMatch[1];
+        } else {
+            const sp = new URLSearchParams(location.search);
+            if (sp.has('ep_id')) epId = sp.get('ep_id');
+        }
+
+        return {
+            bvid: bvid ? bvid.toLowerCase() : null,
+            cid: cid ? String(cid) : null,
+            epId: epId ? epId.toLowerCase() : null,
+            videoKey: getVideoKey()
+        };
+    }
+
+    // 从请求 URL 与响应 JSON 数据中提取视频归属身份
+    function extractPayloadIdentity(url, data) {
+        let bvid = null;
+        let cid = null;
+        let epId = null;
+
+        if (url && typeof url === 'string') {
+            try {
+                const parsedUrl = new URL(url, location.origin);
+                const sp = parsedUrl.searchParams;
+                if (sp.has('bvid')) bvid = sp.get('bvid');
+                if (sp.has('cid')) cid = sp.get('cid');
+                if (sp.has('ep_id')) epId = sp.get('ep_id');
+            } catch {}
+        }
+
+        if (data && typeof data === 'object') {
+            const root = data.data || data.result || data;
+            if (!bvid) bvid = root.bvid || root.video_info?.bvid;
+            if (!cid) cid = root.cid || root.video_info?.cid;
+            if (!epId) epId = root.ep_id || root.video_info?.ep_id;
+        }
+
+        return {
+            bvid: bvid ? bvid.toLowerCase() : null,
+            cid: cid ? String(cid) : null,
+            epId: epId ? epId.toLowerCase() : null
+        };
+    }
+
+    // 严格校验载荷身份与当前播放视频身份的一致性（彻底杜绝推荐流顶替当前视频）
+    function isPayloadMatchingCurrent(payloadId, currentId) {
+        if (!payloadId || !currentId) return true;
+
+        // 1. 若两者均包含 bvid 且不一致，100% 为其他视频（如推荐视频或预加载流），严禁匹配
+        if (payloadId.bvid && currentId.bvid && payloadId.bvid !== currentId.bvid) {
+            return false;
+        }
+
+        // 2. 若两者均包含 epId 且不一致，属于番剧其他分集
+        if (payloadId.epId && currentId.epId && payloadId.epId !== currentId.epId) {
+            return false;
+        }
+
+        // 3. 若两者均包含 cid 且不一致，属于同视频下其他分 P
+        if (payloadId.cid && currentId.cid && payloadId.cid !== currentId.cid) {
+            return false;
+        }
+
+        // 4. 正向匹配条件
+        if (payloadId.bvid && currentId.bvid && payloadId.bvid === currentId.bvid) {
+            return true;
+        }
+        if (payloadId.epId && currentId.epId && payloadId.epId === currentId.epId) {
+            return true;
+        }
+        if (payloadId.cid && currentId.cid && payloadId.cid === currentId.cid) {
+            return true;
+        }
+
+        // 5. 若 payload 没有任何明确身份标识，只要不存在显式冲突则允许
+        if (!payloadId.bvid && !payloadId.cid && !payloadId.epId) {
+            return true;
+        }
+
+        return false;
+    }
+
     // 3. 劫持 window.__playinfo__，支持首屏与后续 SPA 路由更新
     let playinfoData = window.__playinfo__;
 
@@ -621,7 +793,7 @@
         set(val) {
             playinfoData = val;
             if (val) {
-                extractPlayInfo(val, false);
+                extractPlayInfo(val, false, '');
             }
         }
     });
@@ -634,7 +806,7 @@
             const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
             if (isPlayApiUrl(url) && isCurrentVideoRequest(url)) {
                 const clone = response.clone();
-                clone.json().then(data => extractPlayInfo(data, false)).catch(() => {});
+                clone.json().then(data => extractPlayInfo(data, false, url)).catch(() => {});
             }
         } catch {}
         return response;
@@ -652,30 +824,29 @@
             try {
                 if (isPlayApiUrl(this._requestUrl) && isCurrentVideoRequest(this._requestUrl)) {
                     const data = JSON.parse(this.responseText);
-                    extractPlayInfo(data, false);
+                    extractPlayInfo(data, false, this._requestUrl);
                 }
             } catch {}
         });
         return origSend.apply(this, arguments);
     };
 
-    // 5. 提取音视频码率与多档音频链接
-    function extractPlayInfo(data) {
+    // 5. 解析 DASH 音轨与参考视频码率
+    function parseDashTracks(data) {
         const dash = data?.data?.dash || 
                      data?.result?.dash || 
                      data?.data?.playurl?.dash || 
                      data?.data?.playurl_info?.playurl?.dash || 
                      data?.result?.video_info?.dash ||
                      data?.dash;
-        if (!dash) return;
+        if (!dash) return null;
 
-        // 提取视频参考码率
+        let vidBw = 0;
         if (dash.video && dash.video.length) {
             const videoItem = dash.video[0];
-            if (videoItem.bandwidth) videoBandwidth = videoItem.bandwidth;
+            if (videoItem.bandwidth) vidBw = videoItem.bandwidth;
         }
 
-        // 解析全部可用音频轨道
         const tracks = [];
         const pushTrack = (item, typeHint) => {
             if (!item) return;
@@ -713,7 +884,6 @@
             dash.dolby.audio.forEach(item => pushTrack(item, 'dolby'));
         }
 
-        // 去重并按码率降序排序（高音质在前）
         const seen = new Set();
         const validTracks = tracks.filter(t => {
             if (seen.has(t.id)) return false;
@@ -721,62 +891,85 @@
             return true;
         }).sort((a, b) => b.bandwidth - a.bandwidth);
 
-        if (validTracks.length > 0) {
-            availableAudioTracks = validTracks;
+        return { validTracks, videoBandwidth: vidBw };
+    }
 
-            // 匹配用户偏好或选取最佳可用品质
-            let selectedTrack = null;
-            const savedQualityId = localStorage.getItem(STORAGE_KEY_PREFERRED_QUALITY);
-            if (savedQualityId) {
-                selectedTrack = availableAudioTracks.find(t => String(t.id) === savedQualityId);
-            }
-            if (!selectedTrack) {
-                selectedTrack = availableAudioTracks[0];
-            }
+    // 将已校验身份的音轨集合装载并应用到当前播放器
+    function applyAudioTracks(validTracks, vidBw, targetVideoKey) {
+        if (!validTracks || validTracks.length === 0) return;
 
-            currentAudioQualityId = selectedTrack.id;
-            const newAudioUrl = selectedTrack.url;
-            audioBandwidth = selectedTrack.bandwidth;
+        if (vidBw) {
+            videoBandwidth = vidBw;
+        }
+        availableAudioTracks = validTracks;
 
-            const isNewUrl = currentAudioUrl !== newAudioUrl;
-            currentAudioUrl = newAudioUrl;
-            currentAudioVideoKey = getVideoKey();
-
-            // 若当前已在音频模式且音频直链发生变化或正在换视频挂起中，立刻换源起播
-            if (isAudioMode && customAudioEl) {
-                if (isNewUrl || isVideoSwitchPending) {
-                    const origVideo = getOriginalVideo();
-                    // 若处于换视频期间，时间严格从 0（或新视频真实当前进度）起播，杜绝继承旧视频播放进度
-                    let curTime = 0;
-                    if (!isVideoSwitchPending && origVideo && Number.isFinite(origVideo.currentTime) && origVideo.currentTime > 0) {
-                        curTime = origVideo.currentTime;
-                    }
-                    isVideoSwitchPending = false;
-
-                    customAudioEl.src = currentAudioUrl;
-                    if (curTime > 0) {
-                        const onLoaded = () => {
-                            try { customAudioEl.currentTime = curTime; } catch {}
-                            customAudioEl.removeEventListener('loadedmetadata', onLoaded);
-                        };
-                        customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
-                    }
-                    customAudioEl.play().catch(() => {});
-                    updatePlayPauseBtnState(true);
-
-                    // 原视频隐藏并安全暂停
-                    if (origVideo) {
-                        origVideo.style.visibility = 'hidden';
-                        try { origVideo.pause(); } catch {}
-                    }
-                }
-            }
-
-            checkAndApplyAutoMode();
-            renderQualityButtons();
+        // 匹配用户偏好或选取最佳可用品质
+        let selectedTrack = null;
+        const savedQualityId = localStorage.getItem(STORAGE_KEY_PREFERRED_QUALITY);
+        if (savedQualityId) {
+            selectedTrack = availableAudioTracks.find(t => String(t.id) === savedQualityId);
+        }
+        if (!selectedTrack) {
+            selectedTrack = availableAudioTracks[0];
         }
 
+        currentAudioQualityId = selectedTrack.id;
+        const newAudioUrl = selectedTrack.url;
+        audioBandwidth = selectedTrack.bandwidth;
+
+        const isNewUrl = currentAudioUrl !== newAudioUrl;
+        currentAudioUrl = newAudioUrl;
+        currentAudioVideoKey = targetVideoKey || getVideoKey();
+
+        // 若当前已在音频模式且音频直链发生变化或正在换视频挂起中，立刻换源起播
+        if (isAudioMode && customAudioEl) {
+            if (isNewUrl || isVideoSwitchPending) {
+                const origVideo = getOriginalVideo();
+                let curTime = 0;
+                if (!isVideoSwitchPending && origVideo && Number.isFinite(origVideo.currentTime) && origVideo.currentTime > 0) {
+                    curTime = origVideo.currentTime;
+                }
+                isVideoSwitchPending = false;
+
+                customAudioEl.src = currentAudioUrl;
+                if (curTime > 0) {
+                    const onLoaded = () => {
+                        try { customAudioEl.currentTime = curTime; } catch {}
+                        customAudioEl.removeEventListener('loadedmetadata', onLoaded);
+                    };
+                    customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+                }
+                customAudioEl.play().catch(() => {});
+                updatePlayPauseBtnState(true);
+
+                if (origVideo) {
+                    origVideo.style.visibility = 'hidden';
+                    try { origVideo.pause(); } catch {}
+                }
+            }
+        }
+
+        checkAndApplyAutoMode();
+        renderQualityButtons();
         updateTrafficDisplay();
+    }
+
+    // 提取音视频码率与多档音频链接，安全隔离其他推荐视频
+    function extractPlayInfo(data, isInit = false, requestUrl = '') {
+        const parsed = parseDashTracks(data);
+        if (!parsed || !parsed.validTracks || parsed.validTracks.length === 0) return;
+
+        const { validTracks, videoBandwidth: vidBw } = parsed;
+        const payloadId = extractPayloadIdentity(requestUrl, data);
+        const currentId = getCurrentVideoIdentity();
+
+        // 1. 无条件存入音轨缓存池（为 SPA 切换和预加载提供快速命中底座）
+        saveToAudioCache(payloadId, validTracks, vidBw);
+
+        // 2. 身份归属严格判定：仅当载荷与当前主视频完全一致时，才允许装载起播；严防推荐视频串音！
+        if (isPayloadMatchingCurrent(payloadId, currentId)) {
+            applyAudioTracks(validTracks, vidBw, currentId.videoKey);
+        }
     }
 
     // 切换指定音频品质（双音频缓冲无缝接力，彻底消灭切换空隙）
@@ -949,9 +1142,18 @@
             const origVideo = getOriginalVideo();
 
             if (isAudioMode) {
-                // 若尚未取得音频直链，尝试从首屏 __playinfo__ 提取
-                if (!currentAudioUrl && window.__playinfo__) {
-                    extractPlayInfo(window.__playinfo__);
+                // 若尚未取得音频直链，优先从音轨缓存池检索；若兜底读取首屏 playinfo 需严格校验身份一致性
+                if (!currentAudioUrl) {
+                    const currentId = getCurrentVideoIdentity();
+                    const cached = getFromAudioCache(currentId);
+                    if (cached) {
+                        applyAudioTracks(cached.tracks, cached.videoBandwidth, currentId.videoKey);
+                    } else if (window.__playinfo__) {
+                        const playinfoId = extractPayloadIdentity(null, window.__playinfo__);
+                        if (isPayloadMatchingCurrent(playinfoId, currentId)) {
+                            extractPlayInfo(window.__playinfo__, false, '');
+                        }
+                    }
                 }
 
                 if (!audioPanelEl || !audioPanelEl.parentElement) {
@@ -1585,7 +1787,11 @@
     // 14. DOM 动态监听与初始化
     function init() {
         if (window.__playinfo__) {
-            extractPlayInfo(window.__playinfo__, true);
+            const playinfoId = extractPayloadIdentity(null, window.__playinfo__);
+            const curId = getCurrentVideoIdentity();
+            if (isPayloadMatchingCurrent(playinfoId, curId)) {
+                extractPlayInfo(window.__playinfo__, true, '');
+            }
         }
 
         // 监听 SPA 换 P / 换视频，按新视频逻辑独立判断
@@ -1632,6 +1838,13 @@
                 totalPlayedSeconds = 0;
                 renderQualityButtons();
                 updateTrafficDisplay();
+
+                // 尝试从音轨缓存池中瞬时命中提前返回的新视频音轨
+                const currentId = getCurrentVideoIdentity();
+                const cached = getFromAudioCache(currentId);
+                if (cached) {
+                    applyAudioTracks(cached.tracks, cached.videoBandwidth, currentKey);
+                }
             }
 
             // 2. 根据新视频独立记忆或全局配置应用模式
@@ -1658,7 +1871,7 @@
                 setRepeatState(getRepeatState(), false);
                 updateToggleButtonState();
 
-                // 若新音源已经就绪，确保装载起播
+                // 若新音源已经就绪（从缓存池中恢复），确保装载起播
                 if (currentAudioUrl && customAudioEl) {
                     if (customAudioEl.src !== currentAudioUrl) {
                         customAudioEl.src = currentAudioUrl;
