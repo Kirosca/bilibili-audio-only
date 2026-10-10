@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.6
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.7
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增全片视频与音频预估总容量对比展示，采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -24,6 +24,7 @@
     let totalPlayedSeconds = 0;
     let currentVideoUsedBytes = 0;
     let currentVideoSavedBytes = 0;
+    let currentVideoDuration = 0;
     let trafficTimer = null;
 
     let availableAudioTracks = [];
@@ -696,11 +697,12 @@
     const audioDataCache = new Map();
     const MAX_CACHE_ENTRIES = 50;
 
-    function saveToAudioCache(identity, tracks, vidBandwidth) {
+    function saveToAudioCache(identity, tracks, vidBandwidth, duration) {
         if (!tracks || tracks.length === 0 || !identity) return;
         const entry = {
             tracks,
             videoBandwidth: vidBandwidth || 0,
+            duration: duration || 0,
             bvid: identity.bvid,
             cid: identity.cid,
             epId: identity.epId,
@@ -974,15 +976,20 @@
             return true;
         }).sort((a, b) => b.bandwidth - a.bandwidth);
 
-        return { validTracks, videoBandwidth: vidBw };
+        const duration = Number(dash.duration) || (Number(data?.data?.timelength || data?.result?.timelength) / 1000) || 0;
+
+        return { validTracks, videoBandwidth: vidBw, duration };
     }
 
     // 将已校验身份的音轨集合装载并应用到当前播放器
-    function applyAudioTracks(validTracks, vidBw, targetVideoKey) {
+    function applyAudioTracks(validTracks, vidBw, targetVideoKey, duration) {
         if (!validTracks || validTracks.length === 0) return;
 
         if (vidBw) {
             videoBandwidth = vidBw;
+        }
+        if (duration && Number.isFinite(duration) && duration > 0) {
+            currentVideoDuration = duration;
         }
         availableAudioTracks = validTracks;
 
@@ -1042,16 +1049,16 @@
         const parsed = parseDashTracks(data);
         if (!parsed || !parsed.validTracks || parsed.validTracks.length === 0) return;
 
-        const { validTracks, videoBandwidth: vidBw } = parsed;
+        const { validTracks, videoBandwidth: vidBw, duration } = parsed;
         const payloadId = extractPayloadIdentity(requestUrl, data);
         const currentId = getCurrentVideoIdentity();
 
         // 1. 无条件存入音轨缓存池（为 SPA 切换和预加载提供快速命中底座）
-        saveToAudioCache(payloadId, validTracks, vidBw);
+        saveToAudioCache(payloadId, validTracks, vidBw, duration);
 
         // 2. 身份归属严格判定：仅当载荷与当前主视频完全一致时，才允许装载起播；严防推荐视频串音！
         if (isPayloadMatchingCurrent(payloadId, currentId)) {
-            applyAudioTracks(validTracks, vidBw, currentId.videoKey);
+            applyAudioTracks(validTracks, vidBw, currentId.videoKey, duration);
         }
     }
 
@@ -1199,7 +1206,22 @@
         return `${pad(min)}:${pad(sec)}`;
     }
 
-    // 8. 更新流量对比与节省数据显示（当前视频已用流量 + 累计节约流量）
+    // 获取当前视频/音频的有效总时长（秒）
+    function getCurrentMediaDuration() {
+        if (customAudioEl && Number.isFinite(customAudioEl.duration) && customAudioEl.duration > 0) {
+            return customAudioEl.duration;
+        }
+        const origVideo = getOriginalVideo();
+        if (origVideo && Number.isFinite(origVideo.duration) && origVideo.duration > 0) {
+            return origVideo.duration;
+        }
+        if (currentVideoDuration && Number.isFinite(currentVideoDuration) && currentVideoDuration > 0) {
+            return currentVideoDuration;
+        }
+        return 0;
+    }
+
+    // 8. 更新流量对比与节省数据显示（当前视频已用流量 + 累计节约流量 + 方案A全片预估总容量）
     function updateTrafficDisplay() {
         const savedPercent = Math.max(0, ((videoBandwidth - audioBandwidth) / videoBandwidth * 100)).toFixed(1);
         const videoRate = (videoBandwidth / 8 / 1024).toFixed(0);
@@ -1210,6 +1232,10 @@
         const effectiveSavedBytes = currentVideoSavedBytes > 0
             ? currentVideoSavedBytes
             : Math.max(0, (videoBandwidth - audioBandwidth) / 8 * totalPlayedSeconds);
+
+        const duration = getCurrentMediaDuration();
+        const totalAudioBytes = duration > 0 ? (audioBandwidth / 8) * duration : 0;
+        const totalVideoBytes = duration > 0 ? (videoBandwidth / 8) * duration : 0;
 
         const rateElem = document.querySelector('#bili-traffic-rates');
         if (rateElem) {
@@ -1227,9 +1253,19 @@
             usedElem.textContent = formatBytes(effectiveUsedBytes);
         }
 
+        const audioTotalElem = document.querySelector('#bili-traffic-audio-total');
+        if (audioTotalElem) {
+            audioTotalElem.textContent = totalAudioBytes > 0 ? `/ 全片音频约 ${formatBytes(totalAudioBytes)}` : '';
+        }
+
         const savedElem = document.querySelector('#bili-traffic-saved');
         if (savedElem) {
             savedElem.textContent = formatBytes(effectiveSavedBytes);
+        }
+
+        const videoTotalElem = document.querySelector('#bili-traffic-video-total');
+        if (videoTotalElem) {
+            videoTotalElem.textContent = totalVideoBytes > 0 ? `/ 全片视频约 ${formatBytes(totalVideoBytes)}` : '';
         }
     }
 
@@ -1919,13 +1955,15 @@
                 <div id="bili-traffic-box" style="width: 100%; border: 1px solid; border-radius: 6px; padding: 8px 14px; margin-bottom: 10px; font-size: 12px; line-height: 1.6; box-sizing: border-box;">
                     <div id="bili-traffic-rates" style="border-bottom: 1px solid rgba(127,127,127,0.18); padding-bottom: 6px; margin-bottom: 6px;"></div>
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                        <div style="display: flex; align-items: center;">
+                        <div style="display: flex; align-items: center; flex-wrap: wrap;">
                             <span>当前视频已用流量：</span>
                             <span id="bili-traffic-used" style="font-size: 14px; font-weight: bold; color: #00aeec; margin-left: 2px;">0 B</span>
+                            <span id="bili-traffic-audio-total" style="font-size: 11px; opacity: 0.65; margin-left: 4px;"></span>
                         </div>
-                        <div style="display: flex; align-items: center;">
+                        <div style="display: flex; align-items: center; flex-wrap: wrap;">
                             <span>累计节约流量：</span>
                             <span id="bili-traffic-saved" style="font-size: 14px; font-weight: bold; color: #4cd964; margin-left: 2px;">0 B</span>
+                            <span id="bili-traffic-video-total" style="font-size: 11px; opacity: 0.65; margin-left: 4px;"></span>
                         </div>
                     </div>
                 </div>
@@ -2092,8 +2130,14 @@
                 }
             });
             customAudioEl.addEventListener('timeupdate', updateCustomPlayerUI);
-            customAudioEl.addEventListener('loadedmetadata', updateCustomPlayerUI);
-            customAudioEl.addEventListener('durationchange', updateCustomPlayerUI);
+            customAudioEl.addEventListener('loadedmetadata', () => {
+                updateCustomPlayerUI();
+                updateTrafficDisplay();
+            });
+            customAudioEl.addEventListener('durationchange', () => {
+                updateCustomPlayerUI();
+                updateTrafficDisplay();
+            });
             customAudioEl.addEventListener('volumechange', () => {
                 if (!isSyncingVolume) {
                     syncVolumeAudioToVideo();
@@ -2265,6 +2309,7 @@
                 currentAudioUrl = null;
                 availableAudioTracks = [];
                 currentAudioQualityId = null;
+                currentVideoDuration = 0;
                 restoreTrafficStatsForCurrentVideo(currentKey);
                 renderQualityButtons();
 
@@ -2272,7 +2317,7 @@
                 const currentId = getCurrentVideoIdentity();
                 const cached = getFromAudioCache(currentId);
                 if (cached) {
-                    applyAudioTracks(cached.tracks, cached.videoBandwidth, currentKey);
+                    applyAudioTracks(cached.tracks, cached.videoBandwidth, currentKey, cached.duration);
                 }
             }
 
