@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.3.0
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶留声机沉浸式播放大面板，仿真唱针起落与黑胶唱片平滑旋转动效，黑胶指针整体逆时针旋转45度（优化起落与落针真实音轨姿态），彻底修复单页应用（SPA）切换视频与新打开视频时因切页时序倒置、历史断点身份错位及原视频残留时间戳导致新视频进度条瞬移至结尾的严重BUG，建立视频断点强绑定校验、播放尾声自动归零与防溢出越界保护机制，重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.4.0
+// @description  一键切换纯音频省流模式，全新上线【小宇宙】现代播客大卡片播放风格（16:9原比例大圆角高质感封面彻底消除标题裁剪、弥散流光环境光影、专属±15s长音频快进快退、UP主信息联动），支持与网易云黑胶留声机双主题一键无缝切换并记忆，彻底修复单页应用（SPA）切换视频与新打开视频时因切页时序倒置、历史断点身份错位及原视频残留时间戳导致新视频进度条瞬移至结尾的严重BUG，建立视频断点强绑定校验、播放尾声自动归零与防溢出越界保护机制，重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -49,8 +49,28 @@
         TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 3px;"><path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 0 1 0 2h-1.07l-1.2 13.17A3 3 0 0 1 13.75 22H10.25a3 3 0 0 1-2.98-2.83L6.07 6H5a1 1 0 0 1 0-2h5V3zm2 1h2V3h-2v1zm-2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1z"/></svg>`,
         VOLUME_HIGH: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
         VOLUME_MUTE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`,
-        DOWNLOAD: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`
+        DOWNLOAD: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`,
+        BACKWARD_15: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px;"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><text x="12" y="15.5" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text></svg>`,
+        FORWARD_15: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/><text x="12" y="15.5" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text></svg>`,
+        PODCAST: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>`,
+        DISC: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>`,
+        THEME_SWITCH: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>`
     };
+
+    // 大面板视觉风格管理（播客卡片 podcast / 黑胶唱机 vinyl）
+    const STORAGE_KEY_PANEL_THEME_STYLE = 'bili_audio_panel_theme_style_v1';
+    function getPanelThemeStyle() {
+        try {
+            return localStorage.getItem(STORAGE_KEY_PANEL_THEME_STYLE) || 'podcast';
+        } catch {
+            return 'podcast';
+        }
+    }
+    function setPanelThemeStyle(style) {
+        try {
+            localStorage.setItem(STORAGE_KEY_PANEL_THEME_STYLE, style);
+        } catch {}
+    }
 
     // 音量与静音记忆系统及双向防暴音同步控制
     const STORAGE_KEY_USER_VOLUME = 'bili_audio_user_volume';
@@ -449,6 +469,23 @@
         }
         if (needleEl) {
             needleEl.style.transform = isPaused ? 'rotate(-73deg)' : 'rotate(-45deg)';
+        }
+
+        // 小宇宙播客大卡片微动效与状态联动
+        const podcastArtwork = audioPanelEl.querySelector('#bili-podcast-artwork');
+        const podcastGlow = audioPanelEl.querySelector('#bili-podcast-ambient-glow');
+        const podcastBadgeText = audioPanelEl.querySelector('#bili-podcast-badge-text');
+        if (podcastArtwork) {
+            podcastArtwork.style.transform = isPaused ? 'scale(1)' : 'scale(1.02)';
+            podcastArtwork.style.boxShadow = isPaused 
+                ? (isDark ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.12)')
+                : (isDark ? '0 16px 36px rgba(0,174,236,0.22), 0 8px 24px rgba(0,0,0,0.5)' : '0 16px 36px rgba(0,174,236,0.18), 0 8px 24px rgba(0,0,0,0.15)');
+        }
+        if (podcastGlow) {
+            podcastGlow.style.opacity = isPaused ? '0.25' : '0.6';
+        }
+        if (podcastBadgeText) {
+            podcastBadgeText.textContent = isPaused ? '已暂停' : '正在收听';
         }
     }
 
@@ -922,11 +959,19 @@
             } catch {}
         }
 
+        let author = '';
+        try {
+            const upEl = document.querySelector('.up-name, .bili-avatar-name, .up-info--name, .staff-name, .up-detail-top .name');
+            if (upEl && upEl.textContent.trim()) {
+                author = upEl.textContent.trim();
+            }
+        } catch {}
+
         if (cover && cover.startsWith('//')) {
             cover = 'https:' + cover;
         }
 
-        return { title, cover };
+        return { title, cover, author };
     }
 
     // 主动异步向 B 站官方接口拉取权威高清封面与分P标题（100% 官方数据兜底）
@@ -946,8 +991,9 @@
                 }
                 let apiCover = data.pic || '';
                 if (apiCover && apiCover.startsWith('//')) apiCover = 'https:' + apiCover;
+                const apiAuthor = data.owner?.name || '';
 
-                const meta = { title: apiTitle, cover: apiCover };
+                const meta = { title: apiTitle, cover: apiCover, author: apiAuthor };
                 videoMetaCache.set(targetKey, meta);
 
                 // 若当前仍在同一视频，即刻无缝刷新大面板
@@ -958,26 +1004,96 @@
         } catch {}
     }
 
-    // 真正将元数据渲染更新至大面板 DOM
+    // 真正将元数据渲染更新至大面板 DOM（黑胶与播客模式双向同步）
     function applyVinylMetaToUI(meta) {
         if (!audioPanelEl || !meta) return;
-        const coverEl = audioPanelEl.querySelector('#bili-vinyl-cover');
-        const titleEl = audioPanelEl.querySelector('#bili-vinyl-title');
 
-        if (coverEl) {
-            coverEl.style.backgroundSize = 'cover';
-            coverEl.style.backgroundPosition = 'center';
-            coverEl.style.backgroundRepeat = 'no-repeat';
+        // 1. 黑胶模式元素
+        const vinylCoverEl = audioPanelEl.querySelector('#bili-vinyl-cover');
+        const vinylTitleEl = audioPanelEl.querySelector('#bili-vinyl-title');
+
+        if (vinylCoverEl) {
+            vinylCoverEl.style.backgroundSize = 'cover';
+            vinylCoverEl.style.backgroundPosition = 'center';
+            vinylCoverEl.style.backgroundRepeat = 'no-repeat';
             if (meta.cover) {
-                coverEl.style.backgroundImage = `url("${meta.cover}")`;
+                vinylCoverEl.style.backgroundImage = `url("${meta.cover}")`;
             } else {
-                coverEl.style.backgroundImage = 'radial-gradient(circle, #333 0%, #111 100%)';
+                vinylCoverEl.style.backgroundImage = 'radial-gradient(circle, #333 0%, #111 100%)';
             }
         }
-        if (titleEl && meta.title) {
-            titleEl.textContent = meta.title;
-            titleEl.title = meta.title;
+        if (vinylTitleEl && meta.title) {
+            vinylTitleEl.textContent = meta.title;
+            vinylTitleEl.title = meta.title;
         }
+
+        // 2. 小宇宙播客模式元素
+        const podcastArtwork = audioPanelEl.querySelector('#bili-podcast-artwork');
+        const podcastGlow = audioPanelEl.querySelector('#bili-podcast-ambient-glow');
+        const podcastTitle = audioPanelEl.querySelector('#bili-podcast-title');
+        const podcastAuthor = audioPanelEl.querySelector('#bili-podcast-author-name');
+
+        if (podcastArtwork) {
+            podcastArtwork.style.backgroundSize = 'cover';
+            podcastArtwork.style.backgroundPosition = 'center';
+            podcastArtwork.style.backgroundRepeat = 'no-repeat';
+            if (meta.cover) {
+                podcastArtwork.style.backgroundImage = `url("${meta.cover}")`;
+            } else {
+                podcastArtwork.style.backgroundImage = 'linear-gradient(135deg, #2b2d31 0%, #18191c 100%)';
+            }
+        }
+        if (podcastGlow && meta.cover) {
+            podcastGlow.style.backgroundImage = `url("${meta.cover}")`;
+            podcastGlow.style.backgroundSize = 'cover';
+            podcastGlow.style.backgroundPosition = 'center';
+        }
+        if (podcastTitle && meta.title) {
+            podcastTitle.textContent = meta.title;
+            podcastTitle.title = meta.title;
+        }
+        if (podcastAuthor) {
+            const authorText = meta.author || '哔哩哔哩 UP主';
+            podcastAuthor.textContent = authorText;
+            podcastAuthor.title = authorText;
+        }
+    }
+
+    // 切换并应用大面板视觉风格（小宇宙播客 podcast / 网易云黑胶 vinyl）
+    function applyThemeStyleToUI() {
+        if (!audioPanelEl) return;
+        const style = getPanelThemeStyle();
+        const isPodcast = style === 'podcast';
+
+        const podcastWrap = audioPanelEl.querySelector('#bili-podcast-wrap');
+        const vinylWrap = audioPanelEl.querySelector('#bili-vinyl-wrap');
+        const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
+        const btnBack15 = audioPanelEl.querySelector('#bili-btn-backward-15');
+        const btnFwd15 = audioPanelEl.querySelector('#bili-btn-forward-15');
+        const badgeEl = audioPanelEl.querySelector('#bili-audio-mode-badge');
+        const styleBtnText = audioPanelEl.querySelector('#bili-style-text');
+
+        if (podcastWrap) podcastWrap.style.display = isPodcast ? 'flex' : 'none';
+        if (vinylWrap) vinylWrap.style.display = isPodcast ? 'none' : 'flex';
+        if (vinylTitle) vinylTitle.style.display = isPodcast ? 'none' : 'block';
+        if (btnBack15) btnBack15.style.display = isPodcast ? 'inline-flex' : 'none';
+        if (btnFwd15) btnFwd15.style.display = isPodcast ? 'inline-flex' : 'none';
+
+        if (badgeEl) {
+            badgeEl.innerHTML = isPodcast
+                ? `<span style="display: inline-flex; align-items: center;">${ICONS.PODCAST}播客模式</span><span>•</span><span>画面已阻断</span>`
+                : `<span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频黑胶</span><span>•</span><span>画面已阻断</span>`;
+        }
+
+        if (styleBtnText) {
+            styleBtnText.innerHTML = isPodcast ? `${ICONS.PODCAST}风格: 播客` : `${ICONS.DISC}风格: 黑胶`;
+        }
+
+        if (!isPodcast) {
+            enforceVinylCircleDefense();
+        }
+
+        updateAudioCardResponsiveSize();
     }
 
     // 更新网易云黑胶大唱片的封面图与曲目标题
@@ -1852,6 +1968,15 @@
             vinylTitle.style.color = isDark ? '#ffffff' : '#18191c';
         }
 
+        const podcastTitle = audioPanelEl.querySelector('#bili-podcast-title');
+        if (podcastTitle) {
+            podcastTitle.style.color = isDark ? '#ffffff' : '#18191c';
+        }
+        const podcastAuthor = audioPanelEl.querySelector('#bili-podcast-author-name');
+        if (podcastAuthor) {
+            podcastAuthor.style.color = isDark ? '#c9ccd0' : '#4b5058';
+        }
+
         if (settingsBox) {
             settingsBox.style.background = 'transparent';
             settingsBox.style.border = 'none';
@@ -1865,10 +1990,15 @@
             playPauseBtn.style.background = isPaused ? '#00aeec' : 'transparent';
         }
 
-        const restoreBtn = audioPanelEl.querySelector('#bili-btn-restore');
-        if (restoreBtn) {
-            restoreBtn.style.color = isDark ? '#e3e5e7' : '#18191c';
-            restoreBtn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0';
+        audioPanelEl.querySelectorAll('#bili-btn-restore, #bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
+            btn.style.color = isDark ? '#e3e5e7' : '#18191c';
+            btn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0';
+        });
+
+        const toggleStyleBtn = audioPanelEl.querySelector('#bili-btn-toggle-style');
+        if (toggleStyleBtn) {
+            toggleStyleBtn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)';
+            toggleStyleBtn.style.color = isDark ? '#9499a0' : '#61666d';
         }
 
         const progressTrack = audioPanelEl.querySelector('#bili-audio-progress-track');
@@ -1894,6 +2024,7 @@
         });
 
         updateMemoryStatusDisplay();
+        applyThemeStyleToUI();
         updateAudioCardResponsiveSize();
     }
 
@@ -2097,10 +2228,43 @@
             needleScaler.style.transform = `scale(${needleScale})`;
         }
 
+        // 2.2 小宇宙播客卡片尺寸适配（16:9 原比例自适应，保证封面大字完整展现）
+        const podcastWrap = panelCard.querySelector('#bili-podcast-wrap');
+        const podcastArtwork = panelCard.querySelector('#bili-podcast-artwork');
+        const podcastGlow = panelCard.querySelector('#bili-podcast-ambient-glow');
+        if (podcastWrap && podcastArtwork) {
+            const maxPodcastWByWidth = Math.round(targetCardW * 0.62);
+            const maxPodcastWByHeight = Math.round(Math.max(80, h * 0.76 - reservedControlsH) * (16 / 9));
+            let podcastW = Math.min(maxPodcastWByWidth, maxPodcastWByHeight);
+            podcastW = Math.max(160, Math.min(460, podcastW));
+            const podcastH = Math.round(podcastW * 9 / 16);
+
+            podcastArtwork.style.width = `${podcastW}px`;
+            podcastArtwork.style.height = `${podcastH}px`;
+            if (podcastGlow) {
+                podcastGlow.style.width = `${Math.round(podcastW * 0.92)}px`;
+                podcastGlow.style.height = `${Math.round(podcastH * 0.88)}px`;
+            }
+            podcastWrap.style.margin = isCompactHeight ? '2px 0 6px 0' : '4px 0 10px 0';
+        }
+
+        const podcastTitleEl = panelCard.querySelector('#bili-podcast-title');
+        if (podcastTitleEl) {
+            podcastTitleEl.style.fontSize = titleFontSize;
+            podcastTitleEl.style.marginBottom = isCompactHeight ? '2px' : '4px';
+        }
+
         // 主控播放/暂停与恢复视频按钮尺寸
         panelCard.querySelectorAll('#bili-btn-play-pause, #bili-btn-restore').forEach(btn => {
             btn.style.padding = ctrlBtnPadding;
             btn.style.fontSize = ctrlBtnFontSize;
+        });
+
+        // 播客专属 ±15s 快退快进按钮尺寸
+        panelCard.querySelectorAll('#bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
+            const btnD = isCompactHeight ? '30px' : (isSpaciousHeight ? '36px' : '34px');
+            btn.style.width = btnD;
+            btn.style.height = btnD;
         });
 
         // 倍速按钮尺寸
@@ -2504,6 +2668,18 @@
                 .bili-vinyl-disc:hover {
                     filter: brightness(1.06);
                 }
+                #bili-podcast-artwork:hover {
+                    filter: brightness(1.05);
+                }
+                #bili-btn-backward-15:hover,
+                #bili-btn-forward-15:hover {
+                    background: rgba(127,127,127,0.18) !important;
+                    transform: scale(1.06);
+                }
+                #bili-btn-toggle-style:hover {
+                    opacity: 1 !important;
+                    background: rgba(127,127,127,0.18) !important;
+                }
             `;
             (document.head || document.documentElement).appendChild(panelStyle);
         } else {
@@ -2542,20 +2718,46 @@
 
         audioPanelEl.innerHTML = `
             <div id="bili-audio-card" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
-                <!-- 纯音频模式小标识 -->
-                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
-                    <span style="display: inline-flex; align-items: center;">${ICONS.HEADPHONES}纯音频模式</span>
+                <!-- 纯音频/播客模式小标识 -->
+                <div id="bili-audio-mode-badge" style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
+                    <span style="display: inline-flex; align-items: center;">${ICONS.PODCAST}播客模式</span>
                     <span>•</span>
                     <span>画面已阻断</span>
                 </div>
 
-                <!-- 当前音频/视频标题 -->
-                <div id="bili-vinyl-title" style="font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default;" title="">
+                <!-- 黑胶模式专属曲目标题（黑胶模式显示，播客模式隐藏） -->
+                <div id="bili-vinyl-title" style="display: none; font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default;" title="">
                     Bilibili 纯音频模式
                 </div>
 
+                <!-- 小宇宙现代播客大卡片交互视窗（16:9 原比例高质感大圆角封面 + 弥散流光光晕） -->
+                <div id="bili-podcast-wrap" style="position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 4px 0 10px 0; user-select: none;">
+                    <!-- 播客封面容器（叠加弥散光晕与16:9圆角大卡片） -->
+                    <div style="position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+                        <!-- 弥散环境光晕层 -->
+                        <div id="bili-podcast-ambient-glow" style="position: absolute; width: 92%; height: 88%; border-radius: 16px; filter: blur(22px); opacity: 0.55; z-index: 1; pointer-events: none; transition: opacity 0.3s ease, width 0.25s ease, height 0.25s ease;"></div>
+                        <!-- 16:9 高质感圆角大封面卡片 -->
+                        <div id="bili-podcast-artwork" style="position: relative; z-index: 2; width: 320px; height: 180px; border-radius: 12px; background-size: cover; background-position: center; background-repeat: no-repeat; box-shadow: 0 10px 28px rgba(0,0,0,0.35); cursor: pointer; transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, width 0.25s ease, height 0.25s ease;" title="点击播放/暂停">
+                            <!-- 播客收听状态胶囊标贴 -->
+                            <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.68); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 3px 8px; border-radius: 10px; font-size: 10px; color: #ffffff; display: flex; align-items: center; gap: 4px; pointer-events: none; border: 1px solid rgba(255,255,255,0.15);">
+                                <span style="width: 6px; height: 6px; border-radius: 50%; background: #00aeec; display: inline-block;"></span>
+                                <span id="bili-podcast-badge-text">正在收听</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 播客模式视频大标题 -->
+                    <div id="bili-podcast-title" style="font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; cursor: default;" title="">
+                        Bilibili 纯音频播客
+                    </div>
+                    <!-- UP 主创作者信息 -->
+                    <div id="bili-podcast-author" style="display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; opacity: 0.8; margin-bottom: 2px;">
+                        <span style="opacity: 0.7;">UP主:</span>
+                        <span id="bili-podcast-author-name" style="font-weight: 500; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">哔哩哔哩 UP主</span>
+                    </div>
+                </div>
+
                 <!-- 网易云黑胶唱片与留声机唱针交互区 -->
-                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
+                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: none; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
                     <!-- 仿真留声机唱针缩放定位容器 -->
                     <div id="bili-vinyl-needle-scaler" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: scale(1); transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);">
                         <div id="bili-vinyl-needle-wrap" style="width: 44px; height: 102px; transform-origin: 16px 16px; transform: rotate(-73deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
@@ -2644,16 +2846,22 @@
                 <!-- 底部操作区（居中主控按钮 + 右下角微型开关组） -->
                 <div id="bili-audio-bottom-bar" style="width: 100%; display: flex; justify-content: center; align-items: center; position: relative; margin-top: 2px;">
                     <!-- 居中播放/暂停与恢复视频 -->
-                    <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="bili-btn-backward-15" style="display: none; background: transparent; border: 1px solid; border-radius: 50%; width: 34px; height: 34px; padding: 0; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center;" title="快退 15 秒">
+                            ${ICONS.BACKWARD_15}
+                        </button>
                         <button id="bili-btn-play-pause" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
                             ${ICONS.PAUSE}暂停音频
+                        </button>
+                        <button id="bili-btn-forward-15" style="display: none; background: transparent; border: 1px solid; border-radius: 50%; width: 34px; height: 34px; padding: 0; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center;" title="快进 15 秒">
+                            ${ICONS.FORWARD_15}
                         </button>
                         <button id="bili-btn-restore" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
                             ${ICONS.SCREEN}恢复看视频
                         </button>
                     </div>
 
-                    <!-- 右下角紧凑小开关区（替代原横置大框，大幅释放纵向高度） -->
+                    <!-- 右下角紧凑小开关区与风格切换按钮 -->
                     <div id="bili-audio-settings-box" style="position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; opacity: 0.85; user-select: none;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <label style="display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="新视频默认开启听视频">
@@ -2666,6 +2874,9 @@
                             </label>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px; font-size: 10px;">
+                            <button id="bili-btn-toggle-style" style="background: transparent; border: 1px solid; border-radius: 4px; padding: 1px 6px; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 10px; transition: all 0.2s;" title="切换卡片视觉风格（小宇宙播客 / 网易云黑胶）">
+                                <span id="bili-style-text" style="display: inline-flex; align-items: center; gap: 2px;">${ICONS.PODCAST}风格: 播客</span>
+                            </button>
                             <div id="bili-memory-status-text"></div>
                             <button id="bili-btn-reset-memory" style="background: none; border: none; color: #00aeec; cursor: pointer; padding: 0; font-size: 10px; text-decoration: underline;" title="清除本视频独立记忆">清除记忆</button>
                         </div>
@@ -2851,6 +3062,75 @@
                     customAudioEl.pause();
                 }
                 updatePlayPauseBtnState(true);
+            };
+        }
+
+        // 播客大封面点击事件：点击封面直接切换播放/暂停
+        const podcastArtwork = audioPanelEl.querySelector('#bili-podcast-artwork');
+        if (podcastArtwork) {
+            podcastArtwork.onclick = () => {
+                if (!customAudioEl) return;
+                if (pauseDebounceTimer) {
+                    clearTimeout(pauseDebounceTimer);
+                    pauseDebounceTimer = null;
+                }
+                if (seekSettleTimer) {
+                    clearTimeout(seekSettleTimer);
+                    seekSettleTimer = null;
+                }
+                isSeekingOperation = false;
+
+                if (customAudioEl.paused) {
+                    customAudioEl.play().catch(() => {});
+                } else {
+                    customAudioEl.pause();
+                }
+                updatePlayPauseBtnState(true);
+            };
+        }
+
+        // 播客专属 ±15s 快退快进点击事件
+        const btnBackward15 = audioPanelEl.querySelector('#bili-btn-backward-15');
+        if (btnBackward15) {
+            btnBackward15.onclick = () => {
+                if (!customAudioEl) return;
+                const cur = customAudioEl.currentTime || 0;
+                const target = Math.max(0, cur - 15);
+                try {
+                    customAudioEl.currentTime = target;
+                } catch {}
+                syncAudioProgressToVideoAndStorage(true);
+                updateCustomPlayerUI();
+            };
+        }
+
+        const btnForward15 = audioPanelEl.querySelector('#bili-btn-forward-15');
+        if (btnForward15) {
+            btnForward15.onclick = () => {
+                if (!customAudioEl) return;
+                const cur = customAudioEl.currentTime || 0;
+                const dur = customAudioEl.duration || (typeof getCurrentMediaDuration === 'function' ? getCurrentMediaDuration() : 0);
+                let target = cur + 15;
+                if (dur > 3 && target >= dur - 3) {
+                    target = Math.max(0, dur - 3);
+                }
+                try {
+                    customAudioEl.currentTime = target;
+                } catch {}
+                syncAudioProgressToVideoAndStorage(true);
+                updateCustomPlayerUI();
+            };
+        }
+
+        // 视觉风格双主题切换点击事件（播客卡片 / 黑胶留声机）
+        const toggleStyleBtn = audioPanelEl.querySelector('#bili-btn-toggle-style');
+        if (toggleStyleBtn) {
+            toggleStyleBtn.onclick = () => {
+                const curStyle = getPanelThemeStyle();
+                const nextStyle = curStyle === 'podcast' ? 'vinyl' : 'podcast';
+                setPanelThemeStyle(nextStyle);
+                applyThemeStyleToUI();
+                applyThemeToPanel();
             };
         }
 
