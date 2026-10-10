@@ -1869,12 +1869,8 @@
                         <span id="bili-audio-time-total" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.6; min-width: 42px;">00:00</span>
                     </div>
 
-                    <!-- 下载音频与音量控制区域 -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 2px;">
-                        <button id="bili-audio-download-btn" style="background: none; border: none; padding: 3px 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; color: inherit; opacity: 0.85; border-radius: 4px; transition: all 0.2s;" title="下载当前音频文件">
-                            ${ICONS.DOWNLOAD}
-                            <span>下载音频</span>
-                        </button>
+                    <!-- 音量调节与下载音频区域（下载按钮位于音量调节模块右侧） -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 14px; width: 100%; padding-right: 2px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
                                 ${ICONS.VOLUME_HIGH}
@@ -1889,6 +1885,10 @@
                             </div>
                             <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 34px;">100%</span>
                         </div>
+                        <button id="bili-audio-download-btn" style="background: none; border: none; padding: 3px 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; color: inherit; opacity: 0.85; border-radius: 4px; transition: all 0.2s;" title="下载当前音频文件">
+                            ${ICONS.DOWNLOAD}
+                            <span>下载音频</span>
+                        </button>
                     </div>
                 </div>
 
