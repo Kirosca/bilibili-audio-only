@@ -45,7 +45,8 @@
         GLOBE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
         TRASH: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-right: 3px;"><path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h5a1 1 0 0 1 0 2h-1.07l-1.2 13.17A3 3 0 0 1 13.75 22H10.25a3 3 0 0 1-2.98-2.83L6.07 6H5a1 1 0 0 1 0-2h5V3zm2 1h2V3h-2v1zm-2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1zm6 0a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0v-8a1 1 0 0 0-1-1z"/></svg>`,
         VOLUME_HIGH: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`,
-        VOLUME_MUTE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`
+        VOLUME_MUTE: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`,
+        DOWNLOAD: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`
     };
 
     // 音量与静音记忆系统及双向防暴音同步控制
@@ -1667,6 +1668,63 @@
                 updateCustomPlayerUI();
             };
         }
+
+        // 4. 音频下载按钮点击事件
+        const downloadBtn = audioPanelEl.querySelector('#bili-audio-download-btn');
+        if (downloadBtn) {
+            downloadBtn.onclick = () => {
+                downloadCurrentAudio();
+            };
+        }
+    }
+
+    // 下载当前音频直链文件
+    async function downloadCurrentAudio() {
+        if (!currentAudioUrl) {
+            return;
+        }
+
+        const downloadBtn = audioPanelEl ? audioPanelEl.querySelector('#bili-audio-download-btn') : null;
+        const textSpan = downloadBtn ? downloadBtn.querySelector('span') : null;
+        const origText = textSpan ? textSpan.textContent : '下载音频';
+        if (downloadBtn) {
+            downloadBtn.style.opacity = '0.5';
+            downloadBtn.style.pointerEvents = 'none';
+            if (textSpan) textSpan.textContent = '下载中...';
+        }
+
+        let rawTitle = document.title || 'bilibili_audio';
+        rawTitle = rawTitle.replace(/_哔哩哔哩_bilibili.*/i, '').trim();
+        rawTitle = rawTitle.replace(/[\\/:*?"<>|]/g, '_');
+        const filename = `${rawTitle || 'bilibili_audio'}.m4a`;
+
+        try {
+            const res = await fetch(currentAudioUrl);
+            if (!res.ok) throw new Error('网络请求异常');
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } catch {
+            const a = document.createElement('a');
+            a.href = currentAudioUrl;
+            a.target = '_blank';
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } finally {
+            if (downloadBtn) {
+                downloadBtn.style.opacity = '0.85';
+                downloadBtn.style.pointerEvents = 'auto';
+                if (textSpan) textSpan.textContent = origText;
+            }
+        }
     }
 
     // 13. 创建纯音频播放面板
@@ -1713,6 +1771,10 @@
                 .bpx-player-ctrl-volume-progress-bar,
                 .bpx-player-ctrl-volume-progress-inner {
                     background-color: #00aeec !important;
+                }
+                #bili-audio-download-btn:hover {
+                    opacity: 1 !important;
+                    background: rgba(127,127,127,0.18) !important;
                 }
             `;
             document.head.appendChild(styleEl);
@@ -1800,27 +1862,33 @@
                             <div id="bili-audio-progress-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
                                 <!-- 已经播放的进度条部分（B站蓝色） -->
                                 <div id="bili-audio-progress-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
-                                <!-- 进度滑块小圆点 -->
-                                <div id="bili-audio-progress-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #ffffff; border: 2.5px solid #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.25); pointer-events: none; transition: transform 0.15s ease;"></div>
+                                <!-- 进度滑块小圆点（实心蓝色非中空） -->
+                                <div id="bili-audio-progress-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
                             </div>
                         </div>
                         <span id="bili-audio-time-total" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.6; min-width: 42px;">00:00</span>
                     </div>
 
-                    <!-- 音量控制区域 -->
-                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; padding-right: 4px;">
-                        <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
-                            ${ICONS.VOLUME_HIGH}
+                    <!-- 下载音频与音量控制区域 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 2px;">
+                        <button id="bili-audio-download-btn" style="background: none; border: none; padding: 3px 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; color: inherit; opacity: 0.85; border-radius: 4px; transition: all 0.2s;" title="下载当前音频文件">
+                            ${ICONS.DOWNLOAD}
+                            <span>下载音频</span>
                         </button>
-                        <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 80px; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
-                            <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
-                                <!-- 音量0~音量大小那一段（B站蓝色） -->
-                                <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
-                                <!-- 音量滑块小圆点 -->
-                                <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #ffffff; border: 2.5px solid #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.25); pointer-events: none; transition: transform 0.15s ease;"></div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
+                                ${ICONS.VOLUME_HIGH}
+                            </button>
+                            <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 80px; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
+                                <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
+                                    <!-- 音量0~音量大小那一段（B站蓝色） -->
+                                    <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
+                                    <!-- 音量滑块小圆点（实心蓝色非中空） -->
+                                    <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
+                                </div>
                             </div>
+                            <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 34px;">100%</span>
                         </div>
-                        <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 34px;">100%</span>
                     </div>
                 </div>
 
