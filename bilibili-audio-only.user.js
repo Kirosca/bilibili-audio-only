@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      1.9.7
-// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，流量计算模块新增全片视频与音频预估总容量对比展示，采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      1.9.8
+// @description  一键切换纯音频省流量模式，全新定制B站原生风格纯音频播放控制器，已播进度与音量0~当前大小填充段均采用B站官方主题蓝(#00aeec)，新增音频断点续播持久化与B站原视频进度实时双向同步（刷新页面精准保留断点续播，与官方历史记录深度联动），流量计算模块支持全片视频与音频预估总容量对比展示，采用sessionStorage会话存储（刷新页面保留，关闭当前窗口/标签页自动销毁），多档音频品质双缓冲无缝切换，视频身份强绑定校验与多视频缓存池隔离彻底根除串音，视频换P/换稿件音源精准更替与状态隔离，SPA切视频全量API拦截与音源无感自动更替，实时音量双向同步与智能防暴音记忆保护，单曲循环与官方双向联动，寻道防抖全周期零闪烁，全面升级苹果SF Symbols设计规范精细矢量图标
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -407,6 +407,21 @@
                 }
             }
         });
+
+        video.addEventListener('seeked', () => {
+            // 当且仅当音频模式开启、音频刚起播还在 0~2 秒内，且原视频被 B 站官方异步跳转至历史断点时，音频同步跟随
+            if (isAudioMode && customAudioEl && !isSeekingOperation) {
+                const origTime = video.currentTime;
+                if (origTime > 3 && customAudioEl.currentTime < 2) {
+                    try {
+                        customAudioEl.currentTime = origTime;
+                    } catch {}
+                    if (typeof syncAudioProgressToVideoAndStorage === 'function') {
+                        syncAudioProgressToVideoAndStorage(true);
+                    }
+                }
+            }
+        });
     }
 
     // 唤醒 B 站播放器原生播放
@@ -453,6 +468,7 @@
                 return;
             }
             flushCurrentTrafficStats();
+            syncAudioProgressToVideoAndStorage(true);
             updatePlayPauseBtnState();
         }, 120);
     }
@@ -575,6 +591,106 @@
             return { active: mem, source: 'memory' };
         }
         return { active: getGlobalDefault(), source: 'default' };
+    }
+
+    // 播放进度断点记忆与原视频同步管理（LRU 上限 500）
+    const STORAGE_KEY_PLAY_PROGRESS = 'bili_audio_video_progress_v1';
+    const MAX_PROGRESS_LIMIT = 500;
+    let lastProgressSyncTimestamp = 0;
+
+    function loadProgressList() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_PLAY_PROGRESS);
+            if (!raw) return [];
+            const list = JSON.parse(raw);
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveProgressList(list) {
+        try {
+            localStorage.setItem(STORAGE_KEY_PLAY_PROGRESS, JSON.stringify(list.slice(0, MAX_PROGRESS_LIMIT)));
+        } catch {}
+    }
+
+    function getVideoProgress(videoKey) {
+        if (!videoKey) return 0;
+        const list = loadProgressList();
+        const item = list.find(entry => entry.key === videoKey);
+        if (!item || typeof item.time !== 'number') return 0;
+        return item.time > 0 ? item.time : 0;
+    }
+
+    function setVideoProgress(videoKey, time, duration = 0) {
+        if (!videoKey || typeof time !== 'number' || isNaN(time)) return;
+        const list = loadProgressList();
+        const idx = list.findIndex(entry => entry.key === videoKey);
+        if (idx !== -1) {
+            list.splice(idx, 1);
+        }
+
+        // 如果播放时间已接近尾声（离结束不到 3 秒）或者小于 1 秒，重置为 0 从头开始
+        if (duration > 5 && time >= duration - 3) {
+            saveProgressList(list);
+            return;
+        }
+
+        if (time >= 1) {
+            list.unshift({
+                key: videoKey,
+                time: Math.floor(time * 10) / 10,
+                duration: Math.floor(duration || 0),
+                updatedAt: Date.now()
+            });
+        }
+        saveProgressList(list);
+    }
+
+    function getBestStartingTime(videoKey = getVideoKey()) {
+        const origVideo = getOriginalVideo();
+        const origTime = (origVideo && Number.isFinite(origVideo.currentTime)) ? origVideo.currentTime : 0;
+        const savedProgress = getVideoProgress(videoKey);
+
+        // 若原视频已有有效进度（例如看视频模式下正常播到此），优先采用原视频实时时间
+        if (origTime > 1) {
+            return origTime;
+        }
+        // 否则优先恢复本地断点历史（解决刷新页面后原视频为0导致重播的问题）
+        if (savedProgress > 1) {
+            return savedProgress;
+        }
+        return origTime > 0 ? origTime : 0;
+    }
+
+    // 将音频当前播放进度实时双向同步给原视频和本地断点存储
+    function syncAudioProgressToVideoAndStorage(force = false) {
+        if (!customAudioEl) return;
+        const curTime = customAudioEl.currentTime;
+        if (!Number.isFinite(curTime)) return;
+
+        const dur = customAudioEl.duration || 0;
+        const key = getVideoKey();
+        const now = Date.now();
+
+        // 节流控制：非强制同步下每 2 秒最多同步一次原视频与写盘
+        if (force || now - lastProgressSyncTimestamp >= 2000) {
+            lastProgressSyncTimestamp = now;
+
+            // 1. 本地断点记录
+            setVideoProgress(key, curTime, dur);
+
+            // 2. 双向同步回原视频（杜绝密集 seek：当原视频时间与音频偏差大于 1 秒时同步）
+            const origVideo = getOriginalVideo();
+            if (origVideo && Number.isFinite(origVideo.duration)) {
+                if (Math.abs(origVideo.currentTime - curTime) > 1.0) {
+                    try {
+                        origVideo.currentTime = curTime;
+                    } catch {}
+                }
+            }
+        }
     }
 
     // 流量统计会话存储管理（sessionStorage：刷新页面保留，关闭当前窗口/标签页自动销毁，LRU 上限 500）
@@ -1015,19 +1131,21 @@
         if (isAudioMode && customAudioEl) {
             if (isNewUrl || isVideoSwitchPending) {
                 const origVideo = getOriginalVideo();
-                let curTime = 0;
-                if (!isVideoSwitchPending && origVideo && Number.isFinite(origVideo.currentTime) && origVideo.currentTime > 0) {
-                    curTime = origVideo.currentTime;
-                }
+                let curTime = isVideoSwitchPending ? 0 : getBestStartingTime(currentAudioVideoKey);
                 isVideoSwitchPending = false;
 
                 customAudioEl.src = currentAudioUrl;
                 if (curTime > 0) {
                     const onLoaded = () => {
                         try { customAudioEl.currentTime = curTime; } catch {}
+                        syncAudioProgressToVideoAndStorage(true);
                         customAudioEl.removeEventListener('loadedmetadata', onLoaded);
                     };
-                    customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+                    if (customAudioEl.readyState >= 1) {
+                        onLoaded();
+                    } else {
+                        customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+                    }
                 }
                 customAudioEl.play().catch(() => {});
                 updatePlayPauseBtnState(true);
@@ -1318,18 +1436,27 @@
                 if (customAudioEl && currentAudioUrl) {
                     syncVolumeVideoToAudio();
 
+                    const startTime = getBestStartingTime(key);
+
                     if (!shouldPlay) {
                         // 原视频本来就是暂停状态：直接同步时间并暂停，无需接力
-                        const curTime = (origVideo && Number.isFinite(origVideo.currentTime)) ? origVideo.currentTime : 0;
                         if (origVideo) {
                             try { origVideo.pause(); } catch {}
                         }
                         if (customAudioEl.src !== currentAudioUrl) {
                             customAudioEl.src = currentAudioUrl;
                         }
-                        try {
-                            if (curTime > 0) customAudioEl.currentTime = curTime;
-                        } catch {}
+                        if (startTime > 0) {
+                            const applyTime = () => {
+                                try { customAudioEl.currentTime = startTime; } catch {}
+                                syncAudioProgressToVideoAndStorage(true);
+                            };
+                            if (customAudioEl.readyState >= 1) {
+                                applyTime();
+                            } else {
+                                customAudioEl.addEventListener('loadedmetadata', applyTime, { once: true });
+                            }
+                        }
                         customAudioEl.pause();
                         updatePlayPauseBtnState(true);
                     } else {
@@ -1342,14 +1469,16 @@
                             if (origVideo) {
                                 try { origVideo.pause(); } catch {}
                             }
+                            syncAudioProgressToVideoAndStorage(true);
                             updatePlayPauseBtnState(true);
                         };
 
                         const startPlayAudio = () => {
-                            // 读取音频即将发声瞬间原视频的最新实时时间戳
-                            const latestTime = (origVideo && Number.isFinite(origVideo.currentTime)) ? origVideo.currentTime : 0;
+                            // 读取音频即将发声瞬间原视频的最新实时时间戳（若原视频正在播且进度更大则取原视频）
+                            const origNow = (origVideo && Number.isFinite(origVideo.currentTime)) ? origVideo.currentTime : 0;
+                            const seekTarget = (origNow > 1 && origNow > startTime) ? origNow : startTime;
                             try {
-                                if (latestTime > 0) customAudioEl.currentTime = latestTime;
+                                if (seekTarget > 0) customAudioEl.currentTime = seekTarget;
                             } catch {}
                             syncVolumeVideoToAudio();
                             const p = customAudioEl.play();
@@ -1394,11 +1523,13 @@
                         if (totalPlayedSeconds % 3 === 0) {
                             flushCurrentTrafficStats();
                         }
+                        syncAudioProgressToVideoAndStorage(false);
                     }
                 }, 1000);
             } else {
                 // 切换回【看视频】：平滑接力回原视频画面与声音
                 flushCurrentTrafficStats();
+                syncAudioProgressToVideoAndStorage(true);
                 const curTime = customAudioEl && Number.isFinite(customAudioEl.currentTime) ? customAudioEl.currentTime : 0;
                 const shouldPlay = customAudioEl ? !customAudioEl.paused : false;
 
@@ -1728,6 +1859,7 @@
                     try {
                         customAudioEl.currentTime = finalTime;
                     } catch {}
+                    syncAudioProgressToVideoAndStorage(true);
                     window.removeEventListener('pointermove', onProgressPointerMove);
                     window.removeEventListener('pointerup', onProgressPointerUp);
                     window.removeEventListener('pointercancel', onProgressPointerUp);
@@ -2126,10 +2258,14 @@
                         customAudioEl.play().catch(() => {});
                     } catch {}
                 } else {
+                    setVideoProgress(getVideoKey(), 0, 0);
                     updatePlayPauseBtnState(true);
                 }
             });
-            customAudioEl.addEventListener('timeupdate', updateCustomPlayerUI);
+            customAudioEl.addEventListener('timeupdate', () => {
+                updateCustomPlayerUI();
+                syncAudioProgressToVideoAndStorage(false);
+            });
             customAudioEl.addEventListener('loadedmetadata', () => {
                 updateCustomPlayerUI();
                 updateTrafficDisplay();
@@ -2266,9 +2402,11 @@
 
         window.addEventListener('beforeunload', () => {
             flushCurrentTrafficStats();
+            syncAudioProgressToVideoAndStorage(true);
         });
         window.addEventListener('pagehide', () => {
             flushCurrentTrafficStats();
+            syncAudioProgressToVideoAndStorage(true);
         });
 
         const handleVideoChange = () => {
@@ -2365,6 +2503,7 @@
             const currentKey = getVideoKey();
             if (currentKey !== lastVideoKey) {
                 flushCurrentTrafficStats(lastVideoKey);
+                syncAudioProgressToVideoAndStorage(true);
                 lastVideoKey = currentKey;
                 handleVideoChange();
             }
