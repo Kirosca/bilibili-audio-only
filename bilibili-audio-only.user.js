@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.3
-// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题，引入视口尺寸记忆缓存（Layout Memoization）与首帧渲染防抖，彻底消除从浏览器其他标签页切回B站播放页时脚本侧的微重排开销；深度修复纯音频大卡片与B站原生播放器进度条不同步、时长显示00:00、点击寻道跳回开头的严重缺陷，打通B站原生底栏进度条/键盘左右方向键快进快退/官方断点恢复向音频的实时同频响应，全面保障多端进度条100%精准联动
+// @version      2.4.4
+// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题；重构音频流全生命周期与时效性自愈引擎（彻底根治长久挂机暂停后CDN签名过期403无声、切视频听视频失声及反复切换才有声音的严重缺陷）：引入音轨缓存45分钟TTL与deadline超时淘汰、构建全自动静默音源续签拉流管线（主动请求playurl与原生播放器兜底拉流）、建立<audio>错误监听自动恢复机制、确立未就绪阶段原视频声音无缝平滑接力，彻底杜绝任何场景下的无声失联！引入视口尺寸记忆缓存彻底消除切标签页微重排
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1177,6 +1177,40 @@
     // 音频流数据缓存池：按 bvid, cid 或组合键映射保存解析后的可用音轨与码率，防串音并支持瞬时命中
     const audioDataCache = new Map();
     const MAX_CACHE_ENTRIES = 50;
+    const CACHE_TTL_MS = 45 * 60 * 1000; // 45 分钟最大生存期（远低于 B 站 CDN 2 小时的 deadline 鉴权窗口）
+
+    // 检测音频直链 URL 是否已过期失效（检查 deadline/e 参数或时间戳）
+    function isAudioUrlExpired(url, bufferMinutes = 5) {
+        if (!url || typeof url !== 'string') return true;
+        try {
+            const u = new URL(url, location.origin);
+            const deadline = u.searchParams.get('deadline') || u.searchParams.get('e');
+            if (deadline) {
+                const deadlineMs = Number(deadline) * 1000;
+                if (Number.isFinite(deadlineMs) && deadlineMs > 0) {
+                    return Date.now() + bufferMinutes * 60 * 1000 >= deadlineMs;
+                }
+            }
+        } catch {}
+        return false;
+    }
+
+    // 检测缓存池条目是否已过期
+    function isCacheEntryExpired(entry) {
+        if (!entry) return true;
+        if (Date.now() - entry.timestamp > CACHE_TTL_MS) return true;
+        if (entry.tracks && entry.tracks[0] && isAudioUrlExpired(entry.tracks[0].url)) return true;
+        return false;
+    }
+
+    // 从缓存池中剔除指定视频条目（音轨失效或发生 403 错误时使用）
+    function evictAudioCache(identity) {
+        if (!identity) return;
+        if (identity.bvid && identity.cid) audioDataCache.delete(`${identity.bvid}:${identity.cid}`);
+        if (identity.bvid) audioDataCache.delete(`bvid:${identity.bvid}`);
+        if (identity.cid) audioDataCache.delete(`cid:${identity.cid}`);
+        if (identity.epId) audioDataCache.delete(`ep:${identity.epId}`);
+    }
 
     function saveToAudioCache(identity, tracks, vidBandwidth, duration) {
         if (!tracks || tracks.length === 0 || !identity) return;
@@ -1211,25 +1245,35 @@
 
     function getFromAudioCache(identity) {
         if (!identity) return null;
+        const checkHit = (hit) => {
+            if (!hit) return null;
+            if (isCacheEntryExpired(hit)) {
+                evictAudioCache(identity);
+                return null;
+            }
+            return hit;
+        };
+
         if (identity.bvid && identity.cid) {
-            const hit = audioDataCache.get(`${identity.bvid}:${identity.cid}`);
+            const hit = checkHit(audioDataCache.get(`${identity.bvid}:${identity.cid}`));
             if (hit) return hit;
         }
         if (identity.epId) {
-            const hit = audioDataCache.get(`ep:${identity.epId}`);
+            const hit = checkHit(audioDataCache.get(`ep:${identity.epId}`));
             if (hit) return hit;
         }
         if (identity.cid) {
-            const hit = audioDataCache.get(`cid:${identity.cid}`);
+            const hit = checkHit(audioDataCache.get(`cid:${identity.cid}`));
             if (hit) return hit;
         }
         if (identity.bvid) {
-            const hit = audioDataCache.get(`bvid:${identity.bvid}`);
-            if (hit) {
-                if (identity.cid && hit.cid && hit.cid !== identity.cid) {
+            const rawHit = audioDataCache.get(`bvid:${identity.bvid}`);
+            if (rawHit) {
+                if (identity.cid && rawHit.cid && rawHit.cid !== identity.cid) {
                     return null;
                 }
-                return hit;
+                const hit = checkHit(rawHit);
+                if (hit) return hit;
             }
         }
         return null;
@@ -1277,6 +1321,54 @@
             epId: epId ? epId.toLowerCase() : null,
             videoKey: getVideoKey()
         };
+    }
+
+    // 全自动主动拉取新鲜音轨自愈管线（针对长时间挂起导致 403 过期、切视频或音轨缺失场景）
+    let isRequestingFreshAudio = false;
+    let lastAudioRefreshRequestTime = 0;
+
+    async function requestFreshAudioSource(force = false) {
+        const now = Date.now();
+        if (isRequestingFreshAudio || (!force && now - lastAudioRefreshRequestTime < 2500)) {
+            return;
+        }
+        isRequestingFreshAudio = true;
+        lastAudioRefreshRequestTime = now;
+
+        const currentId = getCurrentVideoIdentity();
+
+        try {
+            // 途径 1：如果已有 bvid 与 cid，直接请求 B 站标准官方 playurl 接口获取新鲜 DASH 音轨
+            if (currentId && currentId.bvid && currentId.cid) {
+                const apiUrl = `https://api.bilibili.com/x/player/playurl?bvid=${currentId.bvid}&cid=${currentId.cid}&qn=64&fnval=16`;
+                const fetchFn = origFetch || window.fetch;
+                const res = await fetchFn(apiUrl, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && (data.code === 0 || data.data || data.result)) {
+                        extractPlayInfo(data, false, apiUrl);
+                        isRequestingFreshAudio = false;
+                        return;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 途径 2：唤醒原生播放器核心重新拉流（促使拦截器捕获新鲜 DASH 音轨）
+        try {
+            if (window.player && typeof window.player.reload === 'function') {
+                window.player.reload();
+            } else {
+                const origVideo = getOriginalVideo();
+                if (origVideo && typeof origVideo.load === 'function') {
+                    origVideo.load();
+                }
+            }
+        } catch {}
+
+        setTimeout(() => {
+            isRequestingFreshAudio = false;
+        }, 2500);
     }
 
     // 从请求 URL 与响应 JSON 数据中提取视频归属身份
@@ -1743,8 +1835,9 @@
             const origVideo = getOriginalVideo();
 
             if (isAudioMode) {
-                // 若尚未取得音频直链，优先从音轨缓存池检索；若兜底读取首屏 playinfo 需严格校验身份一致性
-                if (!currentAudioUrl) {
+                // 若尚未取得有效且未过期的音频直链，优先从音轨缓存池检索；若兜底读取首屏 playinfo 需严格校验身份一致性
+                if (!currentAudioUrl || isAudioUrlExpired(currentAudioUrl)) {
+                    currentAudioUrl = null;
                     const currentId = getCurrentVideoIdentity();
                     const cached = getFromAudioCache(currentId);
                     if (cached) {
@@ -1754,6 +1847,9 @@
                         if (isPayloadMatchingCurrent(playinfoId, currentId)) {
                             extractPlayInfo(window.__playinfo__, false, '');
                         }
+                    }
+                    if (!currentAudioUrl) {
+                        requestFreshAudioSource(true);
                     }
                 }
 
@@ -1868,7 +1964,9 @@
                         setTimeout(completeHandover, 500);
                     }
                 } else if (origVideo) {
-                    try { origVideo.pause(); } catch {}
+                    // 核心平滑接力防静音：音频流拉取中，若原视频正在播放，不强行 pause 原视频，让其作为临时发声源！
+                    // 仅隐藏原视频画面，等待音频流到达起播后自动接力静音/暂停原视频
+                    origVideo.style.visibility = 'hidden';
                 }
 
                 clearInterval(trafficTimer);
@@ -3060,6 +3158,15 @@
             customAudioEl.addEventListener('durationchange', () => {
                 updateCustomPlayerUI();
             });
+            customAudioEl.addEventListener('error', () => {
+                const err = customAudioEl.error;
+                console.warn('[BiliAudio] 音频元素播放/加载出错 (可能是 CDN 签名过期 403 或网络中断):', err?.code, err?.message);
+                const curId = getCurrentVideoIdentity();
+                if (curId) evictAudioCache(curId);
+                currentAudioUrl = null;
+                // 启动静默续期拉取自愈
+                requestFreshAudioSource(true);
+            });
             customAudioEl.addEventListener('volumechange', () => {
                 if (!isSyncingVolume) {
                     syncVolumeAudioToVideo();
@@ -3096,28 +3203,45 @@
             };
         }
 
+        const toggleAudioPlayback = () => {
+            if (!customAudioEl) return;
+            if (pauseDebounceTimer) {
+                clearTimeout(pauseDebounceTimer);
+                pauseDebounceTimer = null;
+            }
+            if (seekSettleTimer) {
+                clearTimeout(seekSettleTimer);
+                seekSettleTimer = null;
+            }
+            isSeekingOperation = false;
+
+            if (customAudioEl.paused) {
+                // 时效性安全体检：若当前音频直链已失效过期，立即主动换源，避免向 CDN 提交死请求
+                if (!currentAudioUrl || isAudioUrlExpired(currentAudioUrl) || customAudioEl.error) {
+                    console.info('[BiliAudio] 点击起播检测到音源已过期或异常，启动新鲜音源续期...');
+                    currentAudioUrl = null;
+                    const curId = getCurrentVideoIdentity();
+                    if (curId) evictAudioCache(curId);
+                    requestFreshAudioSource(true);
+                } else {
+                    const p = customAudioEl.play();
+                    if (p && typeof p.catch === 'function') {
+                        p.catch((err) => {
+                            console.warn('[BiliAudio] play() 失败，启动新鲜音源重拉自愈:', err);
+                            requestFreshAudioSource(true);
+                        });
+                    }
+                }
+            } else {
+                customAudioEl.pause();
+            }
+            updatePlayPauseBtnState(true);
+        };
+
         // 播放/暂停点击事件
         const playPauseBtn = audioPanelEl.querySelector('#bili-btn-play-pause');
         if (playPauseBtn) {
-            playPauseBtn.onclick = () => {
-                if (!customAudioEl) return;
-                if (pauseDebounceTimer) {
-                    clearTimeout(pauseDebounceTimer);
-                    pauseDebounceTimer = null;
-                }
-                if (seekSettleTimer) {
-                    clearTimeout(seekSettleTimer);
-                    seekSettleTimer = null;
-                }
-                isSeekingOperation = false;
-
-                if (customAudioEl.paused) {
-                    customAudioEl.play().catch(() => {});
-                } else {
-                    customAudioEl.pause();
-                }
-                updatePlayPauseBtnState(true);
-            };
+            playPauseBtn.onclick = toggleAudioPlayback;
         }
 
         // 恢复看视频点击事件（用户显式行为，记录关闭记忆）
@@ -3140,49 +3264,13 @@
         // 黑胶唱盘点击事件：点击黑胶唱盘或封面即可直接切换播放/暂停
         const vinylDisc = audioPanelEl.querySelector('#bili-vinyl-disc');
         if (vinylDisc) {
-            vinylDisc.onclick = () => {
-                if (!customAudioEl) return;
-                if (pauseDebounceTimer) {
-                    clearTimeout(pauseDebounceTimer);
-                    pauseDebounceTimer = null;
-                }
-                if (seekSettleTimer) {
-                    clearTimeout(seekSettleTimer);
-                    seekSettleTimer = null;
-                }
-                isSeekingOperation = false;
-
-                if (customAudioEl.paused) {
-                    customAudioEl.play().catch(() => {});
-                } else {
-                    customAudioEl.pause();
-                }
-                updatePlayPauseBtnState(true);
-            };
+            vinylDisc.onclick = toggleAudioPlayback;
         }
 
         // 播客大封面点击事件：点击封面直接切换播放/暂停
         const podcastArtwork = audioPanelEl.querySelector('#bili-podcast-artwork');
         if (podcastArtwork) {
-            podcastArtwork.onclick = () => {
-                if (!customAudioEl) return;
-                if (pauseDebounceTimer) {
-                    clearTimeout(pauseDebounceTimer);
-                    pauseDebounceTimer = null;
-                }
-                if (seekSettleTimer) {
-                    clearTimeout(seekSettleTimer);
-                    seekSettleTimer = null;
-                }
-                isSeekingOperation = false;
-
-                if (customAudioEl.paused) {
-                    customAudioEl.play().catch(() => {});
-                } else {
-                    customAudioEl.pause();
-                }
-                updatePlayPauseBtnState(true);
-            };
+            podcastArtwork.onclick = toggleAudioPlayback;
         }
 
         // 播客专属 ±15s 快退快进点击事件
