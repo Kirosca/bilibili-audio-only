@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.2
-// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题，深度修复纯音频大卡片与B站原生播放器进度条不同步、时长显示00:00、点击寻道跳回开头的严重缺陷（重构getCurrentMediaDuration三级权威兜底、杜绝Infinity与NaN破坏百分比计算；确立双向寻道同步标志锁，打通B站原生底栏进度条/键盘左右方向键快进快退/官方断点恢复向音频的实时同频响应；优化切视频与缓存命中起播断点继承），全面保障多端进度条100%精准联动
+// @version      2.4.3
+// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题，引入视口尺寸记忆缓存（Layout Memoization）与首帧渲染防抖，彻底消除从浏览器其他标签页切回B站播放页时脚本侧的微重排开销；深度修复纯音频大卡片与B站原生播放器进度条不同步、时长显示00:00、点击寻道跳回开头的严重缺陷，打通B站原生底栏进度条/键盘左右方向键快进快退/官方断点恢复向音频的实时同频响应，全面保障多端进度条100%精准联动
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1116,7 +1116,7 @@
             enforceVinylCircleDefense();
         }
 
-        updateAudioCardResponsiveSize();
+        updateAudioCardResponsiveSize(true);
     }
 
     // 更新网易云黑胶大唱片的封面图与曲目标题
@@ -2156,9 +2156,34 @@
 
     // 12. 根据父元素视口动态自适应卡片与黑胶唱盘尺寸（对齐视频窗口 0.7 比例，沉浸饱满呈现）
     let panelResizeObserver = null;
-    function updateAudioCardResponsiveSize() {
+    let panelResizeRaf = null;
+    let lastCalculatedCardW = 0;
+    let lastCalculatedCardH = 0;
+    let lastCalculatedCardStyle = '';
+
+    function updateAudioCardResponsiveSize(force = false) {
         if (!audioPanelEl) return;
         const isPodcast = getPanelThemeStyle() === 'podcast';
+        const currentStyleKey = isPodcast ? 'podcast' : 'vinyl';
+
+        // 获取视频窗口父容器有效视口宽度与高度
+        const rect = audioPanelEl.getBoundingClientRect();
+        const parentW = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientWidth : 0);
+        const parentH = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientHeight : 0);
+        const w = Math.round(rect.width || audioPanelEl.clientWidth || parentW || window.innerWidth);
+        const h = Math.round(rect.height || audioPanelEl.clientHeight || parentH || window.innerHeight);
+        if (w <= 0 || h <= 0) return;
+
+        // 视口尺寸记忆缓存拦截（Layout Memoization）：
+        // 若非强制重绘、主题风格未变、且宽高像素变化小于 2px（例如浏览器标签页切换切回前台），直接跳过全部重排与样式重写
+        if (!force && lastCalculatedCardStyle === currentStyleKey && Math.abs(w - lastCalculatedCardW) < 2 && Math.abs(h - lastCalculatedCardH) < 2) {
+            return;
+        }
+
+        lastCalculatedCardW = w;
+        lastCalculatedCardH = h;
+        lastCalculatedCardStyle = currentStyleKey;
+
         // 尺寸解耦：仅在黑胶模式下执行正圆防御，避免干扰播客卡片
         if (!isPodcast) {
             enforceVinylCircleDefense();
@@ -2168,14 +2193,6 @@
         if (!panelCard) return;
 
         panelCard.setAttribute('data-style', isPodcast ? 'podcast' : 'vinyl');
-
-        // 获取视频窗口父容器有效视口宽度与高度
-        const rect = audioPanelEl.getBoundingClientRect();
-        const parentW = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientWidth : 0);
-        const parentH = (audioPanelEl.parentElement ? audioPanelEl.parentElement.clientHeight : 0);
-        const w = Math.round(rect.width || audioPanelEl.clientWidth || parentW || window.innerWidth);
-        const h = Math.round(rect.height || audioPanelEl.clientHeight || parentH || window.innerHeight);
-        if (w <= 0 || h <= 0) return;
 
         // 1. 卡片宽度与比例：严格对齐视频窗口的 0.7（70%）比例
         let targetCardW = Math.round(w * 0.7);
@@ -2349,7 +2366,11 @@
             panelResizeObserver = null;
         }
         panelResizeObserver = new ResizeObserver(() => {
-            updateAudioCardResponsiveSize();
+            if (panelResizeRaf) cancelAnimationFrame(panelResizeRaf);
+            panelResizeRaf = requestAnimationFrame(() => {
+                panelResizeRaf = null;
+                updateAudioCardResponsiveSize(false);
+            });
         });
         panelResizeObserver.observe(audioPanelEl);
         if (audioPanelEl.parentElement) {
