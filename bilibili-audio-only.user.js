@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.1
-// @description  一键切换纯音频省流模式，全新上线【小宇宙】现代播客大卡片播放风格（16:9原比例大圆角高质感封面彻底消除标题裁剪、弥散流光环境光影、专属±15s长音频快进快退、UP主信息联动），支持与网易云黑胶留声机双主题一键无缝切换并记忆，构建双主题互斥隔离体系（彻底修复播客卡片开启时黑胶唱盘因响应式计算覆盖未隐藏重叠显示的BUG），彻底修复单页应用（SPA）切换视频与新打开视频时因切页时序倒置、历史断点身份错位及原视频残留时间戳导致新视频进度条瞬移至结尾的严重BUG，建立视频断点强绑定校验、播放尾声自动归零与防溢出越界保护机制，重构视频元数据解析引擎（支持SPA单页应用切视频/分P/选集自动校准BVID并异步拉取官方最新高清封面与曲目标题，彻底根治换视频时封面与标题不更新问题），全面隔离原视频后台系统级防串音静音与浏览器Autoplay静音对纯音频大面板的反向污染，确立大面板单一真理源音量保护体系（彻底根治切视频/打开视频偶发静音无声的BUG），上线黑胶物理正圆防篡改主动防御系统（彻底解耦正圆样式施加与视口尺寸计算，引入局部 MutationObserver 实时拦截并反击第三方美化插件篡改 border-radius/clip-path 的行为，将样式表特异性提升至全局超高复合权重并支持动态置底，彻底根除偶发需调整窗口才能改回正圆的时序脱节 BUG），大面板恢复自然紧凑包裹黑胶唱盘与控件（消除过度拉伸空隙），倍速控制组新增0.5倍速档位支持微调慢放，将设置开关重构为右下角紧凑微型开关以大幅释放垂直空间，精简剔除流量显示模块，定制B站官方主题蓝进度条与音量条，全面升级音频断点续播持久化与B站原视频进度实时双向同步（刷新页面不丢失进度，与官方历史深度联动），多档音频品质双缓冲无缝切换，视频身份强绑定校验彻底根除串音，实时音量双向同步与智能防暴音记忆保护，全面升级苹果SF Symbols设计规范精细矢量图标
+// @version      2.4.2
+// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题，深度修复纯音频大卡片与B站原生播放器进度条不同步、时长显示00:00、点击寻道跳回开头的严重缺陷（重构getCurrentMediaDuration三级权威兜底、杜绝Infinity与NaN破坏百分比计算；确立双向寻道同步标志锁，打通B站原生底栏进度条/键盘左右方向键快进快退/官方断点恢复向音频的实时同频响应；优化切视频与缓存命中起播断点继承），全面保障多端进度条100%精准联动
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -33,6 +33,7 @@
 
     let isVideoSwitchPending = false;
     let standbyAudioEl = null;
+    let isSyncingToNativeVideo = false; // 音频向原视频同步标志锁（避免由脚本同步触发的 seeked 事件引起反向二次寻道震荡）
 
     // 苹果 SF Symbols 官方设计规范内联 SVG 矢量图标集（层次化质感、极致圆角、完美自适应深浅色主题）
     const ICONS = {
@@ -409,24 +410,36 @@
             }
         });
 
-        video.addEventListener('seeked', () => {
-            // 当且仅当音频模式开启、未在换视频过渡中、音频刚起播还在 0~2 秒内，且原视频被 B 站官方异步跳转至历史断点时，音频同步跟随
+        const handleNativeVideoSeek = () => {
+            // 若当前 seek 是脚本由音频主动同步给原视频的，跳过反向触发
+            if (isSyncingToNativeVideo) return;
+
+            // 当且仅当音频模式开启、未在换视频过渡中且非自定义卡片拖拽中
             if (isAudioMode && customAudioEl && !isSeekingOperation && !isVideoSwitchPending) {
                 const origTime = video.currentTime;
+                if (!Number.isFinite(origTime)) return;
                 const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+                const validDur = (Number.isFinite(dur) && dur > 0) ? dur : 0;
                 // 排除接近尾声与越界的 seek，避免把音频推向结束
-                if (dur > 3 && origTime >= dur - 3) return;
+                if (validDur > 3 && origTime >= validDur - 3) return;
 
-                if (origTime > 3 && customAudioEl.currentTime < 2) {
+                // 外部主动寻道检测（包括用户点击原生底栏进度条、键盘左右方向键快退快进、B 站官方恢复历史断点）：
+                // 只要与当前音频进度相差超过 0.5 秒，音频立即跟随原视频寻道目标，实现双向 100% 实时同步！
+                if (Math.abs(origTime - customAudioEl.currentTime) > 0.5) {
                     try {
                         customAudioEl.currentTime = origTime;
                     } catch {}
+                    if (typeof updateCustomPlayerUI === 'function') {
+                        updateCustomPlayerUI();
+                    }
                     if (typeof syncAudioProgressToVideoAndStorage === 'function') {
-                        syncAudioProgressToVideoAndStorage(true);
+                        syncAudioProgressToVideoAndStorage(true, null, false);
                     }
                 }
             }
-        });
+        };
+
+        video.addEventListener('seeked', handleNativeVideoSeek);
     }
 
     // 唤醒 B 站播放器原生播放
@@ -755,13 +768,18 @@
             // 2. 双向同步回原视频（仅当允许同步、且 activeKey 确为当前页面正在播放的视频时）
             if (syncToNativeVideo && activeKey === getVideoKey()) {
                 const origVideo = getOriginalVideo();
-                if (origVideo && Number.isFinite(origVideo.duration) && origVideo.duration > 0) {
+                if (origVideo) {
                     // 若音频进度已在视频末尾，不同步以免把原生视频推向结束
-                    if (dur > 3 && curTime >= dur - 3) return;
-                    if (Math.abs(origVideo.currentTime - curTime) > 1.0) {
+                    if (Number.isFinite(dur) && dur > 3 && curTime >= dur - 3) return;
+                    if (Math.abs(origVideo.currentTime - curTime) > 0.8) {
+                        isSyncingToNativeVideo = true;
                         try {
                             origVideo.currentTime = curTime;
+                            origVideo.dispatchEvent(new Event('timeupdate'));
                         } catch {}
+                        setTimeout(() => {
+                            isSyncingToNativeVideo = false;
+                        }, 120);
                     }
                 }
             }
@@ -1478,14 +1496,14 @@
         if (isAudioMode && customAudioEl) {
             if (isNewUrl || isVideoSwitchPending) {
                 const origVideo = getOriginalVideo();
-                let curTime = isVideoSwitchPending ? 0 : getBestStartingTime(currentAudioVideoKey);
                 isVideoSwitchPending = false;
+                let curTime = getBestStartingTime(currentAudioVideoKey);
 
                 customAudioEl.src = currentAudioUrl;
                 if (curTime > 0) {
                     const onLoaded = () => {
-                        const dur = customAudioEl.duration || currentVideoDuration || 0;
-                        if (dur > 3 && curTime >= dur - 3) {
+                        const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+                        if (Number.isFinite(dur) && dur > 3 && curTime >= dur - 3) {
                             curTime = 0;
                         }
                         if (curTime > 0) {
@@ -1696,6 +1714,12 @@
         if (currentVideoDuration && Number.isFinite(currentVideoDuration) && currentVideoDuration > 0) {
             return currentVideoDuration;
         }
+        try {
+            if (window.player && typeof window.player.getDuration === 'function') {
+                const pDur = window.player.getDuration();
+                if (Number.isFinite(pDur) && pDur > 0) return pDur;
+            }
+        } catch {}
         return 0;
     }
 
@@ -1878,7 +1902,12 @@
                             try { customAudioEl.pause(); } catch {}
                         }
                         if (Number.isFinite(curTime) && curTime > 0) {
-                            try { origVideo.currentTime = curTime; } catch {}
+                            isSyncingToNativeVideo = true;
+                            try {
+                                origVideo.currentTime = curTime;
+                                origVideo.dispatchEvent(new Event('timeupdate'));
+                            } catch {}
+                            setTimeout(() => { isSyncingToNativeVideo = false; }, 120);
                         }
                         try { origVideo.pause(); } catch {}
                     } else {
@@ -1893,7 +1922,12 @@
                         };
 
                         if (Number.isFinite(curTime) && curTime > 0) {
-                            try { origVideo.currentTime = curTime; } catch {}
+                            isSyncingToNativeVideo = true;
+                            try {
+                                origVideo.currentTime = curTime;
+                                origVideo.dispatchEvent(new Event('timeupdate'));
+                            } catch {}
+                            setTimeout(() => { isSyncingToNativeVideo = false; }, 120);
                         }
 
                         // 监听原视频出画面发声瞬间
@@ -2369,13 +2403,14 @@
         const progressThumbEl = audioPanelEl.querySelector('#bili-audio-progress-thumb');
 
         if (!isDraggingProgress && progressBarEl && progressThumbEl) {
-            const cur = customAudioEl.currentTime || 0;
-            const dur = customAudioEl.duration || 0;
-            const pct = dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
+            const cur = (Number.isFinite(customAudioEl.currentTime) && customAudioEl.currentTime > 0) ? customAudioEl.currentTime : 0;
+            const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+            const validDur = (Number.isFinite(dur) && dur > 0) ? dur : 0;
+            const pct = validDur > 0 ? Math.min(100, Math.max(0, (cur / validDur) * 100)) : 0;
             progressBarEl.style.width = pct + '%';
             progressThumbEl.style.left = pct + '%';
             if (timeCurrentEl) timeCurrentEl.textContent = formatMediaTime(cur);
-            if (timeTotalEl) timeTotalEl.textContent = formatMediaTime(dur);
+            if (timeTotalEl) timeTotalEl.textContent = formatMediaTime(validDur);
         }
 
         const volumeBarEl = audioPanelEl.querySelector('#bili-audio-volume-bar');
@@ -2424,8 +2459,9 @@
         if (progressWrap && progressTrack) {
             const handleProgressSeek = (e) => {
                 const ratio = getTrackRatio(e, progressTrack);
-                const dur = customAudioEl.duration || 0;
-                const targetTime = ratio * dur;
+                const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+                const validDur = (Number.isFinite(dur) && dur > 0) ? dur : 0;
+                const targetTime = validDur > 0 ? ratio * validDur : 0;
                 const pct = ratio * 100;
                 if (progressBar) progressBar.style.width = pct + '%';
                 if (progressThumb) progressThumb.style.left = pct + '%';
@@ -3148,10 +3184,11 @@
             btnForward15.onclick = () => {
                 if (!customAudioEl) return;
                 const cur = customAudioEl.currentTime || 0;
-                const dur = customAudioEl.duration || (typeof getCurrentMediaDuration === 'function' ? getCurrentMediaDuration() : 0);
+                const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+                const validDur = (Number.isFinite(dur) && dur > 0) ? dur : 0;
                 let target = cur + 15;
-                if (dur > 3 && target >= dur - 3) {
-                    target = Math.max(0, dur - 3);
+                if (validDur > 3 && target >= validDur - 3) {
+                    target = Math.max(0, validDur - 3);
                 }
                 try {
                     customAudioEl.currentTime = target;
@@ -3320,10 +3357,14 @@
                 setRepeatState(getRepeatState(), false);
                 updateToggleButtonState();
 
-                // 若新音源已经就绪（从缓存池中恢复），确保装载起播
+                // 若新音源已经就绪（从缓存池中恢复），确保装载起播并继承有效进度
                 if (currentAudioUrl && customAudioEl) {
                     if (customAudioEl.src !== currentAudioUrl) {
                         customAudioEl.src = currentAudioUrl;
+                    }
+                    const bestStart = getBestStartingTime(currentKey);
+                    if (bestStart > 0) {
+                        try { customAudioEl.currentTime = bestStart; } catch {}
                     }
                     customAudioEl.muted = getSavedUserMuted();
                     const curUserVol = getSavedUserVolume();
