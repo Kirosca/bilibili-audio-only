@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.7
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；引入iOS拟态滑动开关、倍速与音质毛玻璃向上竖向弹出菜单、右上角设置抽屉、纯正圆形主播放大按键与双向倍速自适应同步
+// @version      2.4.8
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；沉浸式单行轻量字幕与网易云全屏垂直平滑滚动歌词双模无缝切换；引入iOS拟态滑动开关、倍速/音质/字幕毛玻璃向上竖向弹出菜单、右上角设置抽屉、纯正圆形主播放大按键与双向倍速自适应同步
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -62,7 +62,8 @@
         CHEVRON_UP: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-left: 2px;"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
         PLAY_ROUND: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-left: 2px;"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
         PAUSE_ROUND: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px;"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>`,
-        LOOP: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 9.5l1.5-1v7.5" stroke-width="2.2"/></svg>`
+        LOOP: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 9.5l1.5-1v7.5" stroke-width="2.2"/></svg>`,
+        SUBTITLE: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 2px;"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="7" y1="15" x2="11" y2="15"/><line x1="13" y1="15" x2="17" y2="15"/><line x1="7" y1="11" x2="17" y2="11"/></svg>`
     };
 
     // 大面板视觉风格管理（播客卡片 podcast / 黑胶唱机 vinyl）
@@ -1177,6 +1178,473 @@
         }
     }
 
+    // ==========================================
+    // 沉浸式字幕与网易云歌词垂直平滑滚动引擎系统
+    // ==========================================
+    const STORAGE_KEY_SUBTITLE_MODE = 'bili_audio_subtitle_mode_v2';
+    const STORAGE_KEY_PREFERRED_SUBTITLE_LANG = 'bili_audio_preferred_sub_lang';
+
+    let availableSubtitleTracks = [];
+    let currentSubtitleTrackId = null;
+    let currentSubtitleList = [];
+    let activeSubtitleIndex = -1;
+    let isUserScrollingLyrics = false;
+    let lyricsScrollResumeTimer = null;
+    const subtitleDataCache = new Map();
+
+    function getSubtitleMode() {
+        try {
+            return localStorage.getItem(STORAGE_KEY_SUBTITLE_MODE) || 'off';
+        } catch {
+            return 'off';
+        }
+    }
+
+    function setSubtitleMode(mode) {
+        try {
+            localStorage.setItem(STORAGE_KEY_SUBTITLE_MODE, mode);
+        } catch {}
+    }
+
+    function getPreferredSubtitleLang() {
+        try {
+            return localStorage.getItem(STORAGE_KEY_PREFERRED_SUBTITLE_LANG) || '';
+        } catch {
+            return '';
+        }
+    }
+
+    function setPreferredSubtitleLang(lan) {
+        try {
+            localStorage.setItem(STORAGE_KEY_PREFERRED_SUBTITLE_LANG, lan);
+        } catch {}
+    }
+
+    // 格式化字幕项（统一将相对时间转为浮点秒数，并过滤无效空白项）
+    function normalizeSubtitleList(rawBody) {
+        if (!Array.isArray(rawBody)) return [];
+        return rawBody.map(item => ({
+            from: typeof item.from === 'number' ? item.from : parseFloat(item.from) || 0,
+            to: typeof item.to === 'number' ? item.to : parseFloat(item.to) || 0,
+            content: String(item.content || '').trim()
+        })).filter(item => item.content.length > 0)
+          .sort((a, b) => a.from - b.from);
+    }
+
+    // 异步拉取远程字幕 JSON 数据
+    async function fetchSubtitleBody(url) {
+        if (!url) return [];
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return normalizeSubtitleList(json?.body);
+        } catch (e) {
+            console.warn('[BiliAudio] 字幕 JSON 拉取失败:', e);
+            return [];
+        }
+    }
+
+    // 探测并获取当前视频的所有可用字幕轨道
+    async function fetchSubtitleTracks(bvid, cid) {
+        let rawTracks = [];
+
+        // 1. 尝试从 window.__INITIAL_STATE__ 中获取首屏字幕轨道
+        try {
+            const initState = window.__INITIAL_STATE__;
+            if (initState?.videoData?.subtitle?.list?.length) {
+                const currentP = new URLSearchParams(location.search).get('p') || '1';
+                if (currentP === '1' || !initState.videoData.pages || initState.videoData.pages.length <= 1) {
+                    rawTracks = initState.videoData.subtitle.list;
+                }
+            }
+        } catch {}
+
+        // 2. 权威接口 x/player/v2（精确对应当前分 P 的 cid）
+        if ((!rawTracks || rawTracks.length === 0) && cid && bvid) {
+            try {
+                const res = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, { credentials: 'include' });
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json?.code === 0 && Array.isArray(json?.data?.subtitle?.subtitles)) {
+                        rawTracks = json.data.subtitle.subtitles;
+                    }
+                }
+            } catch {}
+        }
+
+        // 3. 兜底接口 x/web-interface/view
+        if ((!rawTracks || rawTracks.length === 0) && bvid) {
+            try {
+                const res = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json?.code === 0 && Array.isArray(json?.data?.subtitle?.list)) {
+                        rawTracks = json.data.subtitle.list;
+                    }
+                }
+            } catch {}
+        }
+
+        return (rawTracks || []).map(t => {
+            let url = t.subtitle_url || '';
+            if (url.startsWith('//')) url = 'https:' + url;
+            return {
+                id: String(t.id || t.lan),
+                lan: t.lan,
+                lan_doc: t.lan_doc || t.lan,
+                url: url,
+                is_machine: Boolean(t.is_machine)
+            };
+        }).filter(t => Boolean(t.url));
+    }
+
+    // 为当前正在播放的视频装载或更新字幕数据
+    async function loadSubtitleForCurrentVideo(force = false) {
+        const identity = getCurrentVideoIdentity();
+        if (!identity || !identity.bvid) return;
+
+        const currentKey = getVideoKey();
+        const cacheKey = `${identity.bvid}_${identity.cid || 'default'}`;
+
+        if (!force && subtitleDataCache.has(cacheKey)) {
+            const cached = subtitleDataCache.get(cacheKey);
+            availableSubtitleTracks = cached.tracks || [];
+            currentSubtitleTrackId = cached.activeTrackId;
+            currentSubtitleList = cached.list || [];
+            activeSubtitleIndex = -1;
+            renderLyricsList();
+            updateSubtitleMenu();
+            applySubtitleModeToUI();
+            const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+            syncSubtitleHighlight(curTime, true);
+            return;
+        }
+
+        const tracks = await fetchSubtitleTracks(identity.bvid, identity.cid);
+        if (getVideoKey() !== currentKey) return;
+
+        availableSubtitleTracks = tracks;
+        if (!tracks || tracks.length === 0) {
+            currentSubtitleTrackId = null;
+            currentSubtitleList = [];
+            activeSubtitleIndex = -1;
+            renderLyricsList();
+            updateSubtitleMenu();
+            applySubtitleModeToUI();
+            return;
+        }
+
+        // 选择最佳语言轨道：用户历史偏好 > 中文 > 首项
+        const pref = getPreferredSubtitleLang();
+        let targetTrack = null;
+        if (pref) {
+            targetTrack = tracks.find(t => t.lan === pref);
+        }
+        if (!targetTrack) {
+            targetTrack = tracks.find(t => t.lan.startsWith('zh') || t.lan.includes('cn')) || tracks[0];
+        }
+
+        currentSubtitleTrackId = targetTrack.id;
+        const bodyList = await fetchSubtitleBody(targetTrack.url);
+        if (getVideoKey() !== currentKey) return;
+
+        currentSubtitleList = bodyList;
+        activeSubtitleIndex = -1;
+
+        subtitleDataCache.set(cacheKey, {
+            tracks: availableSubtitleTracks,
+            activeTrackId: currentSubtitleTrackId,
+            list: currentSubtitleList
+        });
+
+        renderLyricsList();
+        updateSubtitleMenu();
+        applySubtitleModeToUI();
+        const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+        syncSubtitleHighlight(curTime, true);
+    }
+
+    // 用户切换字幕语言轨道
+    async function switchSubtitleTrack(trackId) {
+        const track = availableSubtitleTracks.find(t => String(t.id) === String(trackId));
+        if (!track) return;
+
+        currentSubtitleTrackId = track.id;
+        setPreferredSubtitleLang(track.lan);
+
+        const currentKey = getVideoKey();
+        const bodyList = await fetchSubtitleBody(track.url);
+        if (getVideoKey() !== currentKey) return;
+
+        currentSubtitleList = bodyList;
+        activeSubtitleIndex = -1;
+
+        const identity = getCurrentVideoIdentity();
+        if (identity) {
+            const cacheKey = `${identity.bvid}_${identity.cid || 'default'}`;
+            subtitleDataCache.set(cacheKey, {
+                tracks: availableSubtitleTracks,
+                activeTrackId: currentSubtitleTrackId,
+                list: currentSubtitleList
+            });
+        }
+
+        renderLyricsList();
+        updateSubtitleMenu();
+        const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+        syncSubtitleHighlight(curTime, true);
+    }
+
+    // 渲染网易云歌词列表 DOM
+    function renderLyricsList() {
+        if (!audioPanelEl) return;
+        const listContainer = audioPanelEl.querySelector('#bili-lyrics-list-container');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '';
+        listContainer.style.transform = 'translateY(110px)';
+
+        if (!currentSubtitleList || currentSubtitleList.length === 0) {
+            const emptyEl = document.createElement('div');
+            emptyEl.className = 'bili-lyric-item';
+            emptyEl.style.cssText = 'color: rgba(127,127,127,0.7); cursor: default; margin-top: 80px;';
+            emptyEl.textContent = (availableSubtitleTracks && availableSubtitleTracks.length > 0) ? '字幕装载中...' : '暂无可用字幕';
+            listContainer.appendChild(emptyEl);
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        currentSubtitleList.forEach((sub, idx) => {
+            const item = document.createElement('div');
+            item.className = 'bili-lyric-item';
+            item.dataset.index = idx;
+            item.dataset.from = sub.from;
+            item.textContent = sub.content;
+
+            item.onclick = (e) => {
+                e.stopPropagation();
+                const fromTime = parseFloat(item.dataset.from);
+                if (Number.isFinite(fromTime) && customAudioEl) {
+                    isUserScrollingLyrics = false;
+                    try {
+                        customAudioEl.currentTime = fromTime;
+                    } catch {}
+                    syncAudioProgressToVideoAndStorage(true);
+                    updateCustomPlayerUI();
+                    syncSubtitleHighlight(fromTime, true);
+                }
+            };
+            frag.appendChild(item);
+        });
+        listContainer.appendChild(frag);
+    }
+
+    // 二分查找时间匹配索引
+    function findSubtitleIndex(time, list) {
+        if (!list || list.length === 0) return -1;
+        let low = 0;
+        let high = list.length - 1;
+        let best = -1;
+
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            const item = list[mid];
+            if (time >= item.from) {
+                best = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        if (best >= 0) {
+            const item = list[best];
+            if (time <= item.to + 0.6) {
+                return best;
+            }
+        }
+        return -1;
+    }
+
+    // 实时同步高亮与歌词垂直平滑居中滚动
+    function syncSubtitleHighlight(time, force = false) {
+        if (!audioPanelEl) return;
+        const mode = getSubtitleMode();
+        if (mode === 'off') return;
+
+        const singleSubEl = audioPanelEl.querySelector('#bili-single-subtitle');
+        const podcastSingleSubEl = audioPanelEl.querySelector('#bili-podcast-single-subtitle');
+
+        if (!currentSubtitleList || currentSubtitleList.length === 0) {
+            const emptyText = availableSubtitleTracks.length > 0 ? '字幕装载中...' : '暂无可用字幕';
+            if (singleSubEl && singleSubEl.textContent !== emptyText) singleSubEl.textContent = emptyText;
+            if (podcastSingleSubEl && podcastSingleSubEl.textContent !== emptyText) podcastSingleSubEl.textContent = emptyText;
+            return;
+        }
+
+        const idx = findSubtitleIndex(time, currentSubtitleList);
+        if (idx === activeSubtitleIndex && !force) return;
+        activeSubtitleIndex = idx;
+
+        const currentText = (idx >= 0 && currentSubtitleList[idx]) ? currentSubtitleList[idx].content : '';
+
+        // 1. 同步单行字幕
+        [singleSubEl, podcastSingleSubEl].forEach(el => {
+            if (!el) return;
+            if (el.textContent !== currentText) {
+                el.style.opacity = '0';
+                setTimeout(() => {
+                    el.textContent = currentText;
+                    el.style.opacity = currentText ? '0.9' : '0';
+                }, 100);
+            }
+        });
+
+        // 2. 同步网易云滚动歌词
+        if (mode === 'scroll') {
+            const listContainer = audioPanelEl.querySelector('#bili-lyrics-list-container');
+            const scrollWrap = audioPanelEl.querySelector('#bili-lyrics-scroll-wrap');
+            if (!listContainer || !scrollWrap) return;
+
+            const items = listContainer.querySelectorAll('.bili-lyric-item');
+            items.forEach((item, i) => {
+                if (i === idx) {
+                    if (!item.classList.contains('active')) item.classList.add('active');
+                } else {
+                    if (item.classList.contains('active')) item.classList.remove('active');
+                }
+            });
+
+            if (!isUserScrollingLyrics && idx >= 0 && items[idx]) {
+                const activeItem = items[idx];
+                const wrapHeight = scrollWrap.clientHeight || 260;
+                const targetY = (wrapHeight / 2) - activeItem.offsetTop - (activeItem.clientHeight / 2);
+                listContainer.style.transition = 'transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)';
+                listContainer.style.transform = `translateY(${targetY}px)`;
+            }
+        }
+    }
+
+    // 应用字幕模式至 UI（黑胶/播客卡片与滚动视窗互斥显示）
+    function applySubtitleModeToUI() {
+        if (!audioPanelEl) return;
+        const mode = getSubtitleMode();
+        const panelCard = audioPanelEl.querySelector('#bili-audio-card');
+        if (panelCard) {
+            panelCard.setAttribute('data-sub-mode', mode);
+        }
+
+        const pillTextEl = audioPanelEl.querySelector('#bili-subtitle-pill-text');
+        if (pillTextEl) {
+            if (mode === 'scroll') pillTextEl.textContent = '字幕: 滚动';
+            else if (mode === 'single') pillTextEl.textContent = '字幕: 单行';
+            else pillTextEl.textContent = '字幕: 关';
+        }
+
+        if (mode === 'scroll') {
+            isUserScrollingLyrics = false;
+            const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+            syncSubtitleHighlight(curTime, true);
+        } else if (mode === 'single') {
+            const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+            syncSubtitleHighlight(curTime, true);
+        }
+    }
+
+    // 动态渲染字幕上弹选择菜单（模式分组 + 语言轨道分组）
+    function updateSubtitleMenu() {
+        if (!audioPanelEl) return;
+        const menuEl = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+        if (!menuEl) return;
+
+        const curMode = getSubtitleMode();
+        menuEl.innerHTML = `
+            <div style="font-size: 10px; opacity: 0.6; padding: 2px 8px 1px 8px; text-align: left;">显示模式</div>
+            <button class="bili-popup-menu-item ${curMode === 'scroll' ? 'active' : ''}" data-sub-action="mode" data-sub-val="scroll">滚动歌词</button>
+            <button class="bili-popup-menu-item ${curMode === 'single' ? 'active' : ''}" data-sub-action="mode" data-sub-val="single">单行字幕</button>
+            <button class="bili-popup-menu-item ${curMode === 'off' ? 'active' : ''}" data-sub-action="mode" data-sub-val="off">关闭字幕</button>
+        `;
+
+        if (availableSubtitleTracks && availableSubtitleTracks.length > 0) {
+            const divider = document.createElement('div');
+            divider.style.cssText = 'height: 1px; background: rgba(127,127,127,0.2); margin: 4px 2px;';
+            menuEl.appendChild(divider);
+
+            const langTitle = document.createElement('div');
+            langTitle.style.cssText = 'font-size: 10px; opacity: 0.6; padding: 2px 8px 1px 8px; text-align: left;';
+            langTitle.textContent = '字幕语言';
+            menuEl.appendChild(langTitle);
+
+            availableSubtitleTracks.forEach(track => {
+                const item = document.createElement('button');
+                item.className = 'bili-popup-menu-item';
+                item.dataset.subAction = 'track';
+                item.dataset.subVal = track.id;
+                item.textContent = track.lan_doc || track.lan;
+                if (String(track.id) === String(currentSubtitleTrackId)) {
+                    item.classList.add('active');
+                }
+                menuEl.appendChild(item);
+            });
+        }
+
+        // 绑定菜单项点击事件
+        menuEl.querySelectorAll('.bili-popup-menu-item').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.subAction;
+                const val = btn.dataset.subVal;
+                if (action === 'mode') {
+                    setSubtitleMode(val);
+                    applySubtitleModeToUI();
+                    updateSubtitleMenu();
+                } else if (action === 'track') {
+                    switchSubtitleTrack(val);
+                }
+                menuEl.classList.remove('show');
+            };
+        });
+    }
+
+    // 绑定网易云歌词滚轮交互手势
+    function bindLyricsScrollEvents() {
+        if (!audioPanelEl) return;
+        const scrollWrap = audioPanelEl.querySelector('#bili-lyrics-scroll-wrap');
+        const listContainer = audioPanelEl.querySelector('#bili-lyrics-list-container');
+        if (!scrollWrap || !listContainer) return;
+
+        scrollWrap.onwheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            isUserScrollingLyrics = true;
+            if (lyricsScrollResumeTimer) clearTimeout(lyricsScrollResumeTimer);
+
+            let currentY = 0;
+            const match = listContainer.style.transform.match(/translateY\((-?\d+(?:\.\d+)?)px\)/);
+            if (match) currentY = parseFloat(match[1]);
+
+            let nextY = currentY - e.deltaY;
+            const wrapHeight = scrollWrap.clientHeight || 260;
+            const listHeight = listContainer.scrollHeight;
+            const minY = (wrapHeight / 2) - listHeight;
+            const maxY = wrapHeight / 2;
+            nextY = Math.max(minY, Math.min(maxY, nextY));
+
+            listContainer.style.transition = 'transform 0.1s ease-out';
+            listContainer.style.transform = `translateY(${nextY}px)`;
+
+            // 3 秒无操作后平滑自动回弹至播放句
+            lyricsScrollResumeTimer = setTimeout(() => {
+                isUserScrollingLyrics = false;
+                listContainer.style.transition = 'transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)';
+                const curTime = (customAudioEl && customAudioEl.currentTime) || 0;
+                syncSubtitleHighlight(curTime, true);
+            }, 3000);
+        };
+    }
+
     // 1. 判断是否为暗黑模式（优先读取 B 站 Cookie: theme_style）
     function isBiliDarkMode() {
         const match = document.cookie.match(/(?:^|;\s*)theme_style=([^;]+)/);
@@ -1625,6 +2093,7 @@
         const isNewUrl = currentAudioUrl !== newAudioUrl;
         currentAudioUrl = newAudioUrl;
         currentAudioVideoKey = targetVideoKey || getVideoKey();
+        loadSubtitleForCurrentVideo();
 
         // 若当前已在音频模式且音频直链发生变化或正在换视频挂起中，立刻换源起播
         if (isAudioMode && customAudioEl) {
@@ -2232,6 +2701,11 @@
         if (volumeTrack) {
             volumeTrack.style.background = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)';
         }
+
+        audioPanelEl.querySelectorAll('.bili-single-subtitle').forEach(el => {
+            el.style.color = isDark ? 'rgba(255,255,255,0.88)' : '#18191c';
+        });
+
         updateCustomPlayerUI();
 
         // 胶囊类按钮（倍速、音质、下载等）自适应背景与边框
@@ -2552,6 +3026,13 @@
             vinylInfoEl.style.display = isPodcast ? 'none' : 'flex';
         }
 
+        // 2.3 网易云全屏滚动歌词视窗高度自适应适配
+        const lyricsScrollWrap = panelCard.querySelector('#bili-lyrics-scroll-wrap');
+        if (lyricsScrollWrap) {
+            const scrollH = isCompactHeight ? 180 : (isSpaciousHeight ? 320 : 250);
+            lyricsScrollWrap.style.height = `${scrollH}px`;
+        }
+
         // 主控纯圆大播放按键尺寸适配（网易云/小宇宙规范）
         const mainPlayBtn = panelCard.querySelector('#bili-btn-play-pause');
         if (mainPlayBtn) {
@@ -2748,6 +3229,7 @@
                         customAudioEl.currentTime = finalTime;
                     } catch {}
                     syncAudioProgressToVideoAndStorage(true);
+                    syncSubtitleHighlight(finalTime, true);
                     window.removeEventListener('pointermove', onProgressPointerMove);
                     window.removeEventListener('pointerup', onProgressPointerUp);
                     window.removeEventListener('pointercancel', onProgressPointerUp);
@@ -2903,6 +3385,9 @@
             applyThemeToPanel();
             updateVinylMeta();
             updateCustomPlayerUI();
+            applySubtitleModeToUI();
+            updateSubtitleMenu();
+            loadSubtitleForCurrentVideo();
             setupPanelResizeObserver();
             updateAudioCardResponsiveSize();
             setupVinylDefenseObserver();
@@ -3239,6 +3724,104 @@
                 #bili-audio-card[data-style="vinyl"] #bili-vinyl-info {
                     display: flex !important;
                 }
+
+                /* 沉浸式网易云全屏垂直滚动歌词视窗与高亮渐变 */
+                #bili-lyrics-scroll-wrap {
+                    width: 100%;
+                    height: 250px;
+                    overflow: hidden;
+                    position: relative;
+                    user-select: none;
+                    cursor: default;
+                    box-sizing: border-box;
+                    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
+                    mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
+                }
+                #bili-lyrics-list-container {
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    box-sizing: border-box;
+                    padding: 24px 0;
+                    will-change: transform;
+                }
+                .bili-lyric-item {
+                    padding: 9px 18px;
+                    margin: 2px 0;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    color: rgba(255, 255, 255, 0.44);
+                    text-align: center;
+                    line-height: 1.5;
+                    cursor: pointer;
+                    transition: all 0.28s cubic-bezier(0.25, 1, 0.5, 1);
+                    max-width: 90%;
+                    word-break: break-word;
+                    user-select: none;
+                }
+                .bili-lyric-item:hover {
+                    color: rgba(255, 255, 255, 0.8);
+                    background: rgba(255, 255, 255, 0.06);
+                }
+                .bili-lyric-item.active {
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #ffffff !important;
+                    transform: scale(1.04);
+                    text-shadow: 0 2px 14px rgba(0,0,0,0.5);
+                }
+
+                /* 单行轻量级居中字幕 */
+                .bili-single-subtitle {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: rgba(255, 255, 255, 0.88);
+                    text-align: center;
+                    line-height: 1.4;
+                    transition: opacity 0.2s ease;
+                    user-select: none;
+                }
+                .bili-single-subtitle:hover {
+                    color: #00aeec !important;
+                }
+
+                /* 浅色模式主题适配覆盖 */
+                #bili-audio-theme-panel[data-dark="false"] .bili-lyric-item {
+                    color: rgba(0, 0, 0, 0.44);
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-lyric-item:hover {
+                    color: rgba(0, 0, 0, 0.82);
+                    background: rgba(0, 0, 0, 0.05);
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-lyric-item.active {
+                    color: #18191c !important;
+                    text-shadow: none;
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-single-subtitle {
+                    color: rgba(0, 0, 0, 0.85);
+                }
+
+                /* 歌词视窗、单行字幕与黑胶/播客卡片互斥展示强保障 */
+                #bili-audio-card[data-sub-mode="scroll"] #bili-vinyl-wrap,
+                #bili-audio-card[data-sub-mode="scroll"] #bili-vinyl-info,
+                #bili-audio-card[data-sub-mode="scroll"] #bili-vinyl-title,
+                #bili-audio-card[data-sub-mode="scroll"] #bili-podcast-wrap {
+                    display: none !important;
+                }
+                #bili-audio-card[data-sub-mode="scroll"] #bili-lyrics-scroll-wrap {
+                    display: flex !important;
+                }
+                #bili-audio-card:not([data-sub-mode="scroll"]) #bili-lyrics-scroll-wrap {
+                    display: none !important;
+                }
+
+                #bili-audio-card[data-sub-mode="single"] .bili-single-subtitle {
+                    display: block !important;
+                }
+                #bili-audio-card:not([data-sub-mode="single"]) .bili-single-subtitle {
+                    display: none !important;
+                }
             `;
             (document.head || document.documentElement).appendChild(panelStyle);
         } else {
@@ -3276,7 +3859,7 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" data-style="${getPanelThemeStyle()}" style="border: 1px solid; border-radius: 12px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.25s ease; position: relative;">
+            <div id="bili-audio-card" data-style="${getPanelThemeStyle()}" data-sub-mode="${getSubtitleMode()}" style="border: 1px solid; border-radius: 12px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.25s ease; position: relative;">
                 
                 <!-- 顶部栏：左侧风格切换胶囊，中间收听标识，右侧设置齿轮与悬浮抽屉 -->
                 <div id="bili-audio-top-bar" style="width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; position: relative; z-index: 30;">
@@ -3369,6 +3952,8 @@
                         <span style="opacity: 0.7;">主播:</span>
                         <span id="bili-podcast-author-name" style="font-weight: 500; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">哔哩哔哩 UP主</span>
                     </div>
+                    <!-- 播客单行轻量字幕节点 -->
+                    <div id="bili-podcast-single-subtitle" class="bili-single-subtitle" style="margin-top: 4px; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" title="点击展开全屏滚动歌词"></div>
                 </div>
 
                 <!-- 网易云黑胶唱片与留声机唱针交互区 -->
@@ -3404,6 +3989,20 @@
                     <div id="bili-vinyl-author" style="font-size: 12px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; margin-top: 2px; cursor: default;" title="">
                         哔哩哔哩 UP主
                     </div>
+                    <!-- 黑胶单行轻量字幕节点 -->
+                    <div id="bili-single-subtitle" class="bili-single-subtitle" style="margin-top: 6px; max-width: 96%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" title="点击展开全屏滚动歌词"></div>
+                </div>
+
+                <!-- 沉浸式网易云全屏垂直滚动歌词视窗 -->
+                <div id="bili-lyrics-scroll-wrap" style="position: relative; width: 100%; height: 250px; overflow: hidden; display: none; flex-direction: column; align-items: center; justify-content: flex-start; margin: 4px 0 10px 0; user-select: none;">
+                    <!-- 顶部悬浮返回封面胶囊 -->
+                    <div style="position: absolute; top: 0; right: 0; z-index: 20; padding: 4px 6px;">
+                        <button id="bili-btn-lyrics-back" class="bili-pill-btn" style="font-size: 10px; padding: 2px 8px;" title="返回封面/唱片视图">
+                            <span>返回封面</span>
+                        </button>
+                    </div>
+                    <!-- 歌词垂直平滑滚动列表容器 -->
+                    <div id="bili-lyrics-list-container" class="bili-lyrics-list-container" style="width: 100%; display: flex; flex-direction: column; align-items: center; transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1); will-change: transform;"></div>
                 </div>
 
                 <!-- 底层原生音频驱动节点（隐藏 controls，由自定义 UI 精确驱动） -->
@@ -3461,7 +4060,7 @@
                             </button>
                         </div>
 
-                        <!-- 右侧功能组：倍速胶囊（竖向菜单）、音质胶囊（竖向菜单）、恢复看视频 -->
+                        <!-- 右侧功能组：倍速胶囊（竖向菜单）、音质胶囊（竖向菜单）、字幕胶囊（竖向菜单）、恢复看视频 -->
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <div class="bili-dropdown-container" id="bili-speed-container" style="position: relative;">
                                 <button id="bili-speed-pill-btn" class="bili-pill-btn" title="播放倍速调节">
@@ -3484,6 +4083,15 @@
                                     ${ICONS.CHEVRON_UP}
                                 </button>
                                 <div id="bili-quality-popup-menu" class="bili-popup-menu"></div>
+                            </div>
+
+                            <div class="bili-dropdown-container" id="bili-subtitle-container" style="position: relative;">
+                                <button id="bili-subtitle-pill-btn" class="bili-pill-btn" title="字幕与滚动歌词设置">
+                                    ${ICONS.SUBTITLE}
+                                    <span id="bili-subtitle-pill-text">字幕: 关</span>
+                                    ${ICONS.CHEVRON_UP}
+                                </button>
+                                <div id="bili-subtitle-popup-menu" class="bili-popup-menu" style="min-width: 105px;"></div>
                             </div>
 
                             <button id="bili-btn-restore" class="bili-pill-btn" style="color: #00aeec; border-color: rgba(0,174,236,0.35);" title="恢复看视频">
@@ -3566,6 +4174,7 @@
             });
             customAudioEl.addEventListener('timeupdate', () => {
                 updateCustomPlayerUI();
+                syncSubtitleHighlight(customAudioEl.currentTime);
                 if (!isAudioHandoverPending) {
                     syncAudioProgressToVideoAndStorage(false);
                 }
@@ -3669,6 +4278,11 @@
             if (qualityMenu && qualityContainer && !qualityContainer.contains(e.target)) {
                 qualityMenu.classList.remove('show');
             }
+            const subtitleContainer = audioPanelEl.querySelector('#bili-subtitle-container');
+            const subtitleMenu = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+            if (subtitleMenu && subtitleContainer && !subtitleContainer.contains(e.target)) {
+                subtitleMenu.classList.remove('show');
+            }
         });
 
         // 倍速胶囊与竖向弹出菜单事件绑定
@@ -3681,6 +4295,8 @@
                 speedMenu.classList.toggle('show');
                 const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
                 if (qm) qm.classList.remove('show');
+                const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                if (sm) sm.classList.remove('show');
             };
         }
         audioPanelEl.querySelectorAll('#bili-speed-popup-menu .bili-popup-menu-item').forEach(btn => {
@@ -3704,6 +4320,43 @@
                 e.stopPropagation();
                 qualityMenu.classList.toggle('show');
                 if (speedMenu) speedMenu.classList.remove('show');
+                const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                if (sm) sm.classList.remove('show');
+            };
+        }
+
+        // 字幕胶囊药丸按钮点击展开/收起竖向菜单
+        const subtitlePillBtn = audioPanelEl.querySelector('#bili-subtitle-pill-btn');
+        const subtitleMenu = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+        if (subtitlePillBtn && subtitleMenu) {
+            subtitlePillBtn.onclick = (e) => {
+                e.stopPropagation();
+                subtitleMenu.classList.toggle('show');
+                if (speedMenu) speedMenu.classList.remove('show');
+                if (qualityMenu) qualityMenu.classList.remove('show');
+            };
+        }
+
+        // 单行轻量字幕点击直达全屏滚动歌词视窗
+        const singleSubEl = audioPanelEl.querySelector('#bili-single-subtitle');
+        const podcastSingleSubEl = audioPanelEl.querySelector('#bili-podcast-single-subtitle');
+        const onSingleSubClick = (e) => {
+            e.stopPropagation();
+            setSubtitleMode('scroll');
+            applySubtitleModeToUI();
+            updateSubtitleMenu();
+        };
+        if (singleSubEl) singleSubEl.onclick = onSingleSubClick;
+        if (podcastSingleSubEl) podcastSingleSubEl.onclick = onSingleSubClick;
+
+        // 全屏歌词视窗“返回封面”按钮事件绑定
+        const lyricsBackBtn = audioPanelEl.querySelector('#bili-btn-lyrics-back');
+        if (lyricsBackBtn) {
+            lyricsBackBtn.onclick = (e) => {
+                e.stopPropagation();
+                setSubtitleMode('single');
+                applySubtitleModeToUI();
+                updateSubtitleMenu();
             };
         }
 
@@ -3778,6 +4431,7 @@
                 } catch {}
                 syncAudioProgressToVideoAndStorage(true);
                 updateCustomPlayerUI();
+                syncSubtitleHighlight(target, true);
             };
         }
 
@@ -3797,6 +4451,7 @@
                 } catch {}
                 syncAudioProgressToVideoAndStorage(true);
                 updateCustomPlayerUI();
+                syncSubtitleHighlight(target, true);
             };
         }
 
@@ -3813,8 +4468,12 @@
         }
 
         bindCustomPlayerControls();
+        bindLyricsScrollEvents();
         updateCustomPlayerUI();
         renderQualityButtons();
+        applySubtitleModeToUI();
+        updateSubtitleMenu();
+        loadSubtitleForCurrentVideo();
         applyThemeToPanel();
         updateVinylMeta();
         setupPanelResizeObserver();
@@ -3930,9 +4589,18 @@
                 availableAudioTracks = [];
                 currentAudioQualityId = null;
                 currentVideoDuration = 0;
+                availableSubtitleTracks = [];
+                currentSubtitleTrackId = null;
+                currentSubtitleList = [];
+                activeSubtitleIndex = -1;
+                isUserScrollingLyrics = false;
+                renderLyricsList();
+                updateSubtitleMenu();
+                applySubtitleModeToUI();
                 restoreTrafficStatsForCurrentVideo(currentKey);
                 renderQualityButtons();
                 updateCustomPlayerUI();
+                loadSubtitleForCurrentVideo(true);
 
                 // 尝试从音轨缓存池中瞬时命中提前返回的新视频音轨
                 const currentId = getCurrentVideoIdentity();
