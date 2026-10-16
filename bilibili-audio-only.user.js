@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.9
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；沉浸式单行轻量字幕与网易云全屏垂直平滑滚动歌词双模无缝切换；全面修复并重构浏览器高倍率缩放（Zoom/DPR变动）下的UI排版自适应、底栏三级弹性流式防溢出、黑胶唱盘与留声机唱针精密几何对齐、以及弹出菜单边缘防截断保护
+// @version      2.5.0
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；沉浸式单行轻量字幕与网易云全屏垂直平滑滚动歌词双模无缝切换；全新上线点击音量图标向上弹出垂直浮动毛玻璃音量调节面板（支持上下拖拽与滚轮微调）；全场景高倍率缩放防挤压弹性排版与边缘保护
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -3058,25 +3058,21 @@
             btn.style.height = btnD;
         });
 
-        // 5. 底栏主控行三级自适应响应式排版（彻底解决浏览器缩放导致的溢出挤压）
+        // 5. 底栏主控行弹性自适应响应式排版（音量改为竖向弹出后底栏空间大幅释放，增强高倍缩放单行容纳力）
         const cardInnerW = targetCardW - (isCompactHeight ? 28 : 36);
         const mainCtrlRow = panelCard.querySelector('#bili-audio-main-controls');
         const leftGroup = panelCard.querySelector('#bili-audio-ctrl-left');
         const centerGroup = panelCard.querySelector('#bili-audio-ctrl-center');
         const rightGroup = panelCard.querySelector('#bili-audio-ctrl-right');
-        const volumeText = panelCard.querySelector('#bili-audio-volume-text');
-        const volumeWrap = panelCard.querySelector('#bili-audio-volume-wrap');
 
         if (mainCtrlRow) {
-            if (cardInnerW >= 610) {
+            if (cardInnerW >= 520) {
                 // 宽屏模式：舒适单行两端排开
                 mainCtrlRow.style.flexDirection = 'row';
                 mainCtrlRow.style.flexWrap = 'nowrap';
                 mainCtrlRow.style.justifyContent = 'space-between';
                 mainCtrlRow.style.alignItems = 'center';
                 mainCtrlRow.style.gap = '0px';
-                if (volumeWrap) volumeWrap.style.width = '66px';
-                if (volumeText) volumeText.style.display = 'inline-block';
                 if (centerGroup) {
                     centerGroup.style.order = '0';
                     centerGroup.style.gap = '14px';
@@ -3093,15 +3089,13 @@
                     btn.style.padding = '3px 10px';
                     btn.style.fontSize = '11px';
                 });
-            } else if (cardInnerW >= 430) {
-                // 中等模式（缩放 125%~150% 典型状态）：紧凑单行，隐藏音量百分比，缩小按钮间距，无缝一行容纳
+            } else if (cardInnerW >= 380) {
+                // 中等紧凑模式（缩放 125%~175% 典型状态）：缩小按钮间距，流畅单行自适应
                 mainCtrlRow.style.flexDirection = 'row';
                 mainCtrlRow.style.flexWrap = 'nowrap';
                 mainCtrlRow.style.justifyContent = 'space-between';
                 mainCtrlRow.style.alignItems = 'center';
                 mainCtrlRow.style.gap = '0px';
-                if (volumeWrap) volumeWrap.style.width = '42px';
-                if (volumeText) volumeText.style.display = 'none';
                 if (centerGroup) {
                     centerGroup.style.order = '0';
                     centerGroup.style.gap = '8px';
@@ -3119,14 +3113,12 @@
                     btn.style.fontSize = '10.5px';
                 });
             } else {
-                // 超窄模式（高倍率缩放或小视口）：两行布局，主播放键置顶居中，两组辅助键居中排开
+                // 超窄模式（极高缩放或超小视口）：主播放键置顶居中，两组辅助键居中排开
                 mainCtrlRow.style.flexDirection = 'column';
                 mainCtrlRow.style.flexWrap = 'wrap';
                 mainCtrlRow.style.justifyContent = 'center';
                 mainCtrlRow.style.alignItems = 'center';
                 mainCtrlRow.style.gap = '8px';
-                if (volumeWrap) volumeWrap.style.width = '40px';
-                if (volumeText) volumeText.style.display = 'none';
                 if (centerGroup) {
                     centerGroup.style.order = '1';
                     centerGroup.style.gap = '10px';
@@ -3222,25 +3214,25 @@
             if (timeTotalEl) timeTotalEl.textContent = formatMediaTime(validDur);
         }
 
-        const volumeBarEl = audioPanelEl.querySelector('#bili-audio-volume-bar');
-        const volumeThumbEl = audioPanelEl.querySelector('#bili-audio-volume-thumb');
-        const volumeTextEl = audioPanelEl.querySelector('#bili-audio-volume-text');
+        const volumeVerticalBar = audioPanelEl.querySelector('#bili-volume-vertical-bar');
+        const volumeVerticalThumb = audioPanelEl.querySelector('#bili-volume-vertical-thumb');
+        const volumePopupText = audioPanelEl.querySelector('#bili-volume-popup-text');
         const volumeBtnEl = audioPanelEl.querySelector('#bili-audio-volume-btn');
 
-        if (!isDraggingVolume && volumeBarEl && volumeThumbEl) {
+        if (!isDraggingVolume && volumeVerticalBar && volumeVerticalThumb) {
             const isMuted = customAudioEl.muted;
             const vol = isMuted ? 0 : (typeof customAudioEl.volume === 'number' ? customAudioEl.volume : 1);
             const pct = Math.round(vol * 100);
-            volumeBarEl.style.width = pct + '%';
-            volumeThumbEl.style.left = pct + '%';
-            if (volumeTextEl) volumeTextEl.textContent = pct + '%';
+            volumeVerticalBar.style.height = pct + '%';
+            volumeVerticalThumb.style.bottom = pct + '%';
+            if (volumePopupText) volumePopupText.textContent = pct + '%';
             if (volumeBtnEl) {
                 volumeBtnEl.innerHTML = (isMuted || vol === 0) ? ICONS.VOLUME_MUTE : ICONS.VOLUME_HIGH;
             }
         }
     }
 
-    // 绑定自定义音频播放控制器（进度跳转、拖拽寻道、音量调节与静音切换）
+    // 绑定自定义音频播放控制器（进度跳转、拖拽寻道、竖向音量调节与静音切换）
     function bindCustomPlayerControls() {
         if (!audioPanelEl || !customAudioEl) return;
 
@@ -3250,11 +3242,13 @@
         const progressThumb = audioPanelEl.querySelector('#bili-audio-progress-thumb');
         const timeCurrentEl = audioPanelEl.querySelector('#bili-audio-time-current');
 
-        const volumeWrap = audioPanelEl.querySelector('#bili-audio-volume-wrap');
-        const volumeTrack = audioPanelEl.querySelector('#bili-audio-volume-track');
-        const volumeBar = audioPanelEl.querySelector('#bili-audio-volume-bar');
-        const volumeThumb = audioPanelEl.querySelector('#bili-audio-volume-thumb');
-        const volumeTextEl = audioPanelEl.querySelector('#bili-audio-volume-text');
+        const volumeContainer = audioPanelEl.querySelector('#bili-volume-container');
+        const volumePopupPanel = audioPanelEl.querySelector('#bili-volume-popup-panel');
+        const volumeWrap = audioPanelEl.querySelector('#bili-volume-vertical-wrap');
+        const volumeTrack = audioPanelEl.querySelector('#bili-volume-vertical-track');
+        const volumeBar = audioPanelEl.querySelector('#bili-volume-vertical-bar');
+        const volumeThumb = audioPanelEl.querySelector('#bili-volume-vertical-thumb');
+        const volumePopupText = audioPanelEl.querySelector('#bili-volume-popup-text');
         const volumeBtn = audioPanelEl.querySelector('#bili-audio-volume-btn');
 
         const getTrackRatio = (e, trackEl) => {
@@ -3262,6 +3256,13 @@
             if (rect.width <= 0) return 0;
             const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
             return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        };
+
+        const getVerticalTrackRatio = (e, trackEl) => {
+            const rect = trackEl.getBoundingClientRect();
+            if (rect.height <= 0) return 0;
+            const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0;
+            return Math.max(0, Math.min(1, (rect.bottom - clientY) / rect.height));
         };
 
         // 1. 进度条交互（点击与拖动）
@@ -3323,23 +3324,24 @@
             progressWrap.addEventListener('pointerdown', onProgressPointerDown);
         }
 
-        // 2. 音量条交互（点击与拖动）
+        // 2. 竖向浮动音量调节框交互（上下拖拽、点击寻道与滚轮微调）
         if (volumeWrap && volumeTrack) {
             const handleVolumeAdjust = (e) => {
-                const ratio = getTrackRatio(e, volumeTrack);
+                const ratio = getVerticalTrackRatio(e, volumeTrack);
                 const pct = Math.round(ratio * 100);
-                if (volumeBar) volumeBar.style.width = pct + '%';
-                if (volumeThumb) volumeThumb.style.left = pct + '%';
-                if (volumeTextEl) volumeTextEl.textContent = pct + '%';
+                if (volumeBar) volumeBar.style.height = pct + '%';
+                if (volumeThumb) volumeThumb.style.bottom = pct + '%';
+                if (volumePopupText) volumePopupText.textContent = pct + '%';
                 if (volumeBtn) {
                     volumeBtn.innerHTML = (pct === 0) ? ICONS.VOLUME_MUTE : ICONS.VOLUME_HIGH;
                 }
-                customAudioEl.muted = false;
+                customAudioEl.muted = (pct === 0);
                 customAudioEl.volume = ratio;
                 syncVolumeAudioToVideo();
             };
 
             const onVolumePointerDown = (e) => {
+                e.stopPropagation();
                 isDraggingVolume = true;
                 handleVolumeAdjust(e);
 
@@ -3362,11 +3364,49 @@
             };
 
             volumeWrap.addEventListener('pointerdown', onVolumePointerDown);
+
+            // 滚轮在音量面板上滚动平滑微调（步长 5%）
+            const onVolumeWheel = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                let currentVol = customAudioEl.muted ? 0 : (typeof customAudioEl.volume === 'number' ? customAudioEl.volume : 1);
+                const step = 0.05;
+                if (e.deltaY < 0) {
+                    currentVol = Math.min(1, currentVol + step);
+                } else {
+                    currentVol = Math.max(0, currentVol - step);
+                }
+                customAudioEl.muted = (currentVol === 0);
+                customAudioEl.volume = currentVol;
+                syncVolumeAudioToVideo();
+                updateCustomPlayerUI();
+            };
+            volumeWrap.addEventListener('wheel', onVolumeWheel, { passive: false });
+            if (volumePopupPanel) {
+                volumePopupPanel.addEventListener('wheel', onVolumeWheel, { passive: false });
+                volumePopupPanel.onclick = (e) => e.stopPropagation();
+            }
         }
 
-        // 3. 音量按钮点击静音/取消静音
-        if (volumeBtn) {
-            volumeBtn.onclick = () => {
+        // 3. 音量按钮点击：展开/收起竖向音量调节面板，双击快速静音/取消静音
+        if (volumeBtn && volumePopupPanel) {
+            volumeBtn.onclick = (e) => {
+                e.stopPropagation();
+                const willShow = !volumePopupPanel.classList.contains('show');
+                volumePopupPanel.classList.toggle('show', willShow);
+                if (willShow) {
+                    const sm = audioPanelEl.querySelector('#bili-speed-popup-menu');
+                    if (sm) sm.classList.remove('show');
+                    const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
+                    if (qm) qm.classList.remove('show');
+                    const subM = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                    if (subM) subM.classList.remove('show');
+                    const sd = audioPanelEl.querySelector('#bili-audio-settings-drawer');
+                    if (sd) sd.classList.remove('open');
+                }
+            };
+            volumeBtn.ondblclick = (e) => {
+                e.stopPropagation();
                 if (customAudioEl.muted || customAudioEl.volume === 0) {
                     customAudioEl.muted = false;
                     if (customAudioEl.volume === 0) {
@@ -3681,6 +3721,85 @@
                     font-weight: 600;
                 }
 
+                /* 向上竖向展开浮动毛玻璃音量调节面板 */
+                .bili-volume-popup {
+                    display: none;
+                    position: absolute;
+                    bottom: calc(100% + 10px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(30, 32, 36, 0.95);
+                    backdrop-filter: blur(14px);
+                    -webkit-backdrop-filter: blur(14px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 16px;
+                    padding: 8px 0 10px 0;
+                    flex-direction: column;
+                    align-items: center;
+                    width: 36px;
+                    z-index: 60;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+                    user-select: none;
+                }
+                .bili-volume-popup.show {
+                    display: flex !important;
+                }
+                #bili-volume-popup-text {
+                    font-size: 10px;
+                    font-variant-numeric: tabular-nums;
+                    color: #e3e5e7;
+                    margin-bottom: 8px;
+                    user-select: none;
+                    pointer-events: none;
+                }
+                .bili-volume-vertical-wrap {
+                    width: 22px;
+                    height: 86px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    position: relative;
+                    touch-action: none;
+                }
+                .bili-volume-vertical-track {
+                    width: 4px;
+                    height: 100%;
+                    border-radius: 2px;
+                    background: rgba(127, 127, 127, 0.3);
+                    position: relative;
+                    transition: width 0.15s ease;
+                }
+                .bili-volume-vertical-wrap:hover .bili-volume-vertical-track {
+                    width: 6px;
+                }
+                .bili-volume-vertical-bar {
+                    position: absolute;
+                    left: 0;
+                    bottom: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: #00aeec;
+                    border-radius: 2px;
+                    pointer-events: none;
+                }
+                .bili-volume-vertical-thumb {
+                    position: absolute;
+                    left: 50%;
+                    bottom: 100%;
+                    transform: translate(-50%, 50%);
+                    width: 11px;
+                    height: 11px;
+                    border-radius: 50%;
+                    background: #00aeec;
+                    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+                    pointer-events: none;
+                    transition: transform 0.15s ease;
+                }
+                .bili-volume-vertical-wrap:hover .bili-volume-vertical-thumb {
+                    transform: translate(-50%, 50%) scale(1.18);
+                }
+
                 /* 右上角偏好设置悬浮抽屉 */
                 .bili-settings-drawer {
                     display: none;
@@ -3793,6 +3912,17 @@
                     border-color: rgba(0, 0, 0, 0.1);
                     box-shadow: 0 10px 28px rgba(0,0,0,0.14);
                     color: #18191c;
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-volume-popup {
+                    background: rgba(255, 255, 255, 0.96);
+                    border-color: rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+                }
+                #bili-audio-theme-panel[data-dark="false"] #bili-volume-popup-text {
+                    color: #18191c;
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-volume-vertical-track {
+                    background: rgba(0, 0, 0, 0.14);
                 }
 
                 /* 双主题互斥展示强保障（避免外部样式或尺寸计算覆盖导致黑胶/播客重叠显示） */
@@ -4113,7 +4243,7 @@
 
                     <!-- 2. 主控按键与胶囊选项行 -->
                     <div id="bili-audio-main-controls" style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 2px 0;">
-                        <!-- 左侧快捷组：循环模式按钮、下载音频按钮、音量条 -->
+                        <!-- 左侧快捷组：循环模式按钮、下载音频按钮、竖向浮动音量调节按钮 -->
                         <div id="bili-audio-ctrl-left" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             <button id="bili-btn-loop-mode" class="bili-pill-btn" title="单曲循环播放切换">
                                 ${ICONS.LOOP}
@@ -4122,17 +4252,19 @@
                                 ${ICONS.DOWNLOAD}
                                 <span>下载</span>
                             </button>
-                            <div style="display: flex; align-items: center; gap: 4px; margin-left: 2px;">
-                                <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
+                            <div class="bili-dropdown-container" id="bili-volume-container" style="position: relative; display: inline-flex; align-items: center;">
+                                <button id="bili-audio-volume-btn" class="bili-icon-btn" title="音量调节 (点击展开竖向调节，双击静音)">
                                     ${ICONS.VOLUME_HIGH}
                                 </button>
-                                <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 66px; height: 20px; display: flex; align-items: center; cursor: pointer; position: relative;">
-                                    <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 4px; border-radius: 2px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
-                                        <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 2px; pointer-events: none;"></div>
-                                        <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
+                                <div id="bili-volume-popup-panel" class="bili-volume-popup">
+                                    <span id="bili-volume-popup-text">100%</span>
+                                    <div id="bili-volume-vertical-wrap" class="bili-volume-vertical-wrap" title="垂直拖拽调节音量，支持滚轮滚动">
+                                        <div id="bili-volume-vertical-track" class="bili-volume-vertical-track">
+                                            <div id="bili-volume-vertical-bar" class="bili-volume-vertical-bar"></div>
+                                            <div id="bili-volume-vertical-thumb" class="bili-volume-vertical-thumb"></div>
+                                        </div>
                                     </div>
                                 </div>
-                                <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 30px;">100%</span>
                             </div>
                         </div>
 
@@ -4348,7 +4480,18 @@
         if (settingsBtn && settingsDrawer) {
             settingsBtn.onclick = (e) => {
                 e.stopPropagation();
-                settingsDrawer.classList.toggle('open');
+                const willOpen = !settingsDrawer.classList.contains('open');
+                settingsDrawer.classList.toggle('open', willOpen);
+                if (willOpen) {
+                    const vp = audioPanelEl.querySelector('#bili-volume-popup-panel');
+                    if (vp) vp.classList.remove('show');
+                    const sm = audioPanelEl.querySelector('#bili-speed-popup-menu');
+                    if (sm) sm.classList.remove('show');
+                    const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
+                    if (qm) qm.classList.remove('show');
+                    const subM = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                    if (subM) subM.classList.remove('show');
+                }
             };
         }
 
@@ -4356,6 +4499,11 @@
         audioPanelEl.addEventListener('click', (e) => {
             if (settingsDrawer && !settingsDrawer.contains(e.target) && (!settingsBtn || !settingsBtn.contains(e.target))) {
                 settingsDrawer.classList.remove('open');
+            }
+            const volumeContainer = audioPanelEl.querySelector('#bili-volume-container');
+            const volumePopupPanel = audioPanelEl.querySelector('#bili-volume-popup-panel');
+            if (volumePopupPanel && volumeContainer && !volumeContainer.contains(e.target)) {
+                volumePopupPanel.classList.remove('show');
             }
             const speedContainer = audioPanelEl.querySelector('#bili-speed-container');
             const speedMenu = audioPanelEl.querySelector('#bili-speed-popup-menu');
@@ -4381,11 +4529,16 @@
         if (speedPillBtn && speedMenu) {
             speedPillBtn.onclick = (e) => {
                 e.stopPropagation();
-                speedMenu.classList.toggle('show');
-                const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
-                if (qm) qm.classList.remove('show');
-                const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
-                if (sm) sm.classList.remove('show');
+                const willShow = !speedMenu.classList.contains('show');
+                speedMenu.classList.toggle('show', willShow);
+                if (willShow) {
+                    const vp = audioPanelEl.querySelector('#bili-volume-popup-panel');
+                    if (vp) vp.classList.remove('show');
+                    const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
+                    if (qm) qm.classList.remove('show');
+                    const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                    if (sm) sm.classList.remove('show');
+                }
             };
         }
         audioPanelEl.querySelectorAll('#bili-speed-popup-menu .bili-popup-menu-item').forEach(btn => {
@@ -4407,10 +4560,15 @@
         if (qualityPillBtn && qualityMenu) {
             qualityPillBtn.onclick = (e) => {
                 e.stopPropagation();
-                qualityMenu.classList.toggle('show');
-                if (speedMenu) speedMenu.classList.remove('show');
-                const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
-                if (sm) sm.classList.remove('show');
+                const willShow = !qualityMenu.classList.contains('show');
+                qualityMenu.classList.toggle('show', willShow);
+                if (willShow) {
+                    const vp = audioPanelEl.querySelector('#bili-volume-popup-panel');
+                    if (vp) vp.classList.remove('show');
+                    if (speedMenu) speedMenu.classList.remove('show');
+                    const sm = audioPanelEl.querySelector('#bili-subtitle-popup-menu');
+                    if (sm) sm.classList.remove('show');
+                }
             };
         }
 
@@ -4420,9 +4578,14 @@
         if (subtitlePillBtn && subtitleMenu) {
             subtitlePillBtn.onclick = (e) => {
                 e.stopPropagation();
-                subtitleMenu.classList.toggle('show');
-                if (speedMenu) speedMenu.classList.remove('show');
-                if (qualityMenu) qualityMenu.classList.remove('show');
+                const willShow = !subtitleMenu.classList.contains('show');
+                subtitleMenu.classList.toggle('show', willShow);
+                if (willShow) {
+                    const vp = audioPanelEl.querySelector('#bili-volume-popup-panel');
+                    if (vp) vp.classList.remove('show');
+                    if (speedMenu) speedMenu.classList.remove('show');
+                    if (qualityMenu) qualityMenu.classList.remove('show');
+                }
             };
         }
 
