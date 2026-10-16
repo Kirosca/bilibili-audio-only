@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.4
-// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题；重构音频流全生命周期与时效性自愈引擎（彻底根治长久挂机暂停后CDN签名过期403无声、切视频听视频失声及反复切换才有声音的严重缺陷）：引入音轨缓存45分钟TTL与deadline超时淘汰、构建全自动静默音源续签拉流管线（主动请求playurl与原生播放器兜底拉流）、建立<audio>错误监听自动恢复机制、确立未就绪阶段原视频声音无缝平滑接力，彻底杜绝任何场景下的无声失联！引入视口尺寸记忆缓存彻底消除切标签页微重排
+// @version      2.4.5
+// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题；深度修复开播数秒切听视频进度不同步与0秒倒灌缺陷（构建初次交接期全局同步屏障Handover Barrier与不可变原子时间戳快照、消灭寻道乒乓震荡）；引入模式切换事务令牌严格防抖与B站官方历史断点冲突消解机制；重构音频流全生命周期与时效性自愈引擎，视口尺寸记忆缓存消除切标签页微重排
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -34,6 +34,8 @@
     let isVideoSwitchPending = false;
     let standbyAudioEl = null;
     let isSyncingToNativeVideo = false; // 音频向原视频同步标志锁（避免由脚本同步触发的 seeked 事件引起反向二次寻道震荡）
+    let isAudioHandoverPending = false; // 音频初次装载/换源寻道交接屏障锁（防止 0 进度反向污染原视频与历史断点）
+    let currentSwitchTransactionId = 0; // 模式切换事务令牌（严格防并发与防抖）
 
     // 苹果 SF Symbols 官方设计规范内联 SVG 矢量图标集（层次化质感、极致圆角、完美自适应深浅色主题）
     const ICONS = {
@@ -414,6 +416,17 @@
             // 若当前 seek 是脚本由音频主动同步给原视频的，跳过反向触发
             if (isSyncingToNativeVideo) return;
 
+            // 若正处于初次握手交接期（音频仍在换源加载中），若原生播放器触发了 seek（如 B 站官方自动恢复历史进度）
+            if (isAudioHandoverPending) {
+                const origTime = video.currentTime;
+                if (Number.isFinite(origTime) && origTime > 0.5 && customAudioEl) {
+                    try {
+                        customAudioEl.currentTime = origTime;
+                    } catch {}
+                }
+                return;
+            }
+
             // 当且仅当音频模式开启、未在换视频过渡中且非自定义卡片拖拽中
             if (isAudioMode && customAudioEl && !isSeekingOperation && !isVideoSwitchPending) {
                 const origTime = video.currentTime;
@@ -743,8 +756,13 @@
     // 将音频当前播放进度实时双向同步给原视频和本地断点存储
     function syncAudioProgressToVideoAndStorage(force = false, targetKey = null, syncToNativeVideo = true) {
         if (!customAudioEl) return;
+        // 核心屏障：握手交接未完成前（音频未就绪寻道完毕），严禁任何向原视频与断点存储的回写，彻底消灭 0 秒倒灌！
+        if (isAudioHandoverPending && !force) return;
+
         const curTime = customAudioEl.currentTime;
         if (!Number.isFinite(curTime)) return;
+        // 安全防线：媒体初始化或刚换源时产生的瞬时 0 进度（<= 0.05秒），非显式强制清零下坚决拒绝回写
+        if (curTime <= 0.05 && !force) return;
 
         const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
         const activeKey = targetKey || currentAudioVideoKey || getVideoKey();
@@ -777,9 +795,13 @@
                             origVideo.currentTime = curTime;
                             origVideo.dispatchEvent(new Event('timeupdate'));
                         } catch {}
-                        setTimeout(() => {
+                        // 健壮性保障：监听原生视频真实的 seeked 事件精准释放互斥锁，配 500ms 超时兜底，消灭固定 120ms 的乒乓震荡
+                        const releaseLock = () => {
+                            origVideo.removeEventListener('seeked', releaseLock);
                             isSyncingToNativeVideo = false;
-                        }, 120);
+                        };
+                        origVideo.addEventListener('seeked', releaseLock, { once: true });
+                        setTimeout(releaseLock, 500);
                     }
                 }
             }
@@ -1589,26 +1611,26 @@
             if (isNewUrl || isVideoSwitchPending) {
                 const origVideo = getOriginalVideo();
                 isVideoSwitchPending = false;
+                isAudioHandoverPending = true;
                 let curTime = getBestStartingTime(currentAudioVideoKey);
 
                 customAudioEl.src = currentAudioUrl;
-                if (curTime > 0) {
-                    const onLoaded = () => {
-                        const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
-                        if (Number.isFinite(dur) && dur > 3 && curTime >= dur - 3) {
-                            curTime = 0;
-                        }
-                        if (curTime > 0) {
-                            try { customAudioEl.currentTime = curTime; } catch {}
-                            syncAudioProgressToVideoAndStorage(true);
-                        }
-                        customAudioEl.removeEventListener('loadedmetadata', onLoaded);
-                    };
-                    if (customAudioEl.readyState >= 1) {
-                        onLoaded();
-                    } else {
-                        customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+                const onLoaded = () => {
+                    const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
+                    if (Number.isFinite(dur) && dur > 3 && curTime >= dur - 3) {
+                        curTime = 0;
                     }
+                    if (curTime > 0) {
+                        try { customAudioEl.currentTime = curTime; } catch {}
+                    }
+                    isAudioHandoverPending = false;
+                    syncAudioProgressToVideoAndStorage(true);
+                    customAudioEl.removeEventListener('loadedmetadata', onLoaded);
+                };
+                if (customAudioEl.readyState >= 1) {
+                    onLoaded();
+                } else {
+                    customAudioEl.addEventListener('loadedmetadata', onLoaded, { once: true });
                 }
                 // 确保新视频换源起播时音量与静音状态受用户真实配置保护，杜绝由于系统换源阶段而残留静音
                 customAudioEl.muted = getSavedUserMuted();
@@ -1833,8 +1855,19 @@
 
             isAudioMode = Boolean(enable);
             const origVideo = getOriginalVideo();
+            const transactionId = ++currentSwitchTransactionId;
 
             if (isAudioMode) {
+                // 确立交接保护屏障：在音频真正就绪寻道完毕并出声前，阻断一切向原视频的回写与断点覆盖
+                isAudioHandoverPending = true;
+
+                // 核心修复：原子级捕获用户点击切换那一瞬间原视频当前的真实有效播放进度，确立不可变目标时间戳
+                let capturedOrigTime = 0;
+                if (origVideo && Number.isFinite(origVideo.currentTime) && origVideo.currentTime > 0.2) {
+                    capturedOrigTime = origVideo.currentTime;
+                }
+                const baselineStartTime = capturedOrigTime > 0 ? capturedOrigTime : getBestStartingTime(key);
+
                 // 若尚未取得有效且未过期的音频直链，优先从音轨缓存池检索；若兜底读取首屏 playinfo 需严格校验身份一致性
                 if (!currentAudioUrl || isAudioUrlExpired(currentAudioUrl)) {
                     currentAudioUrl = null;
@@ -1875,93 +1908,110 @@
                     syncVolumeVideoToAudio();
 
                     const maxDur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
-                    let startTime = getBestStartingTime(key);
-                    if (maxDur > 3 && startTime >= maxDur - 3) {
-                        startTime = 0;
-                    }
 
                     if (!shouldPlay) {
-                        // 原视频本来就是暂停状态：直接同步时间并暂停，无需接力
+                        // 原视频本来就是暂停状态：平滑对齐时间并保持暂停
                         if (origVideo) {
                             try { origVideo.pause(); } catch {}
                         }
                         if (customAudioEl.src !== currentAudioUrl) {
                             customAudioEl.src = currentAudioUrl;
                         }
-                        if (startTime > 0) {
-                            const applyTime = () => {
-                                const dur = customAudioEl.duration || maxDur || 0;
-                                if (dur > 3 && startTime >= dur - 3) {
-                                    startTime = 0;
-                                }
-                                if (startTime > 0) {
-                                    try { customAudioEl.currentTime = startTime; } catch {}
-                                    syncAudioProgressToVideoAndStorage(true);
-                                }
-                            };
-                            if (customAudioEl.readyState >= 1) {
-                                applyTime();
-                            } else {
-                                customAudioEl.addEventListener('loadedmetadata', applyTime, { once: true });
+                        const applyTimeAndPause = () => {
+                            if (transactionId !== currentSwitchTransactionId) return;
+                            const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || maxDur || 0);
+                            let finalTarget = baselineStartTime;
+                            if (dur > 3 && finalTarget >= dur - 3) {
+                                finalTarget = 0;
                             }
+                            if (finalTarget > 0) {
+                                try { customAudioEl.currentTime = finalTarget; } catch {}
+                            }
+                            customAudioEl.pause();
+                            isAudioHandoverPending = false;
+                            syncAudioProgressToVideoAndStorage(true);
+                            updatePlayPauseBtnState(true);
+                            updateCustomPlayerUI();
+                        };
+
+                        if (customAudioEl.readyState >= 1) {
+                            applyTimeAndPause();
+                        } else {
+                            customAudioEl.addEventListener('loadedmetadata', applyTimeAndPause, { once: true });
                         }
-                        customAudioEl.pause();
-                        updatePlayPauseBtnState(true);
                     } else {
-                        // 原视频正在播放：执行无感平滑音频接力（Handover）
+                        // 原视频正在播放：执行无感平滑音频接力（Handover），确保声音绝不中断且绝不倒灌 0 秒
                         let handoverDone = false;
                         const completeHandover = () => {
-                            if (handoverDone) return;
+                            if (handoverDone || transactionId !== currentSwitchTransactionId) return;
                             handoverDone = true;
-                            // 音频已真正开始发声，此时瞬时暂停原视频，声音毫无顿挫且不重复
+                            isAudioHandoverPending = false;
+                            // 音频已真正完成寻道并出声，此时平滑暂停原视频
                             if (origVideo) {
                                 try { origVideo.pause(); } catch {}
                             }
                             syncAudioProgressToVideoAndStorage(true);
                             updatePlayPauseBtnState(true);
+                            updateCustomPlayerUI();
                         };
 
-                        const startPlayAudio = () => {
-                            // 读取音频即将发声瞬间原视频的最新实时时间戳（若原视频正在播且进度更大则取原视频）
-                            const isSwitching = isVideoSwitchPending || (currentAudioVideoKey && currentAudioVideoKey !== key);
-                            let origNow = (!isSwitching && origVideo && Number.isFinite(origVideo.currentTime)) ? origVideo.currentTime : 0;
-                            const dur = customAudioEl.duration || maxDur || 0;
-                            if (dur > 3 && origNow >= dur - 3) {
-                                origNow = 0;
+                        const executeAudioSeekAndPlay = () => {
+                            if (handoverDone || transactionId !== currentSwitchTransactionId) return;
+                            const dur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || maxDur || 0);
+                            let seekTarget = baselineStartTime;
+                            // 若原视频在音频网络加载期间持续前进了，取原视频最新时间戳以实现无缝贴合
+                            if (origVideo && !origVideo.paused && Number.isFinite(origVideo.currentTime) && origVideo.currentTime > seekTarget) {
+                                seekTarget = origVideo.currentTime;
                             }
-                            let seekTarget = (origNow > 1 && origNow > startTime) ? origNow : startTime;
                             if (dur > 3 && seekTarget >= dur - 3) {
                                 seekTarget = 0;
                             }
-                            try {
-                                if (seekTarget > 0) customAudioEl.currentTime = seekTarget;
-                            } catch {}
-                            syncVolumeVideoToAudio();
-                            const p = customAudioEl.play();
-                            if (p && typeof p.then === 'function') {
-                                p.then(completeHandover).catch(completeHandover);
+
+                            const onSeekReadyAndPlay = () => {
+                                if (handoverDone || transactionId !== currentSwitchTransactionId) return;
+                                syncVolumeVideoToAudio();
+                                const p = customAudioEl.play();
+                                if (p && typeof p.then === 'function') {
+                                    p.then(completeHandover).catch(() => {
+                                        completeHandover();
+                                    });
+                                } else {
+                                    completeHandover();
+                                }
+                            };
+
+                            if (seekTarget > 0.2) {
+                                try {
+                                    customAudioEl.currentTime = seekTarget;
+                                } catch {}
+                                if (Math.abs(customAudioEl.currentTime - seekTarget) <= 0.3) {
+                                    onSeekReadyAndPlay();
+                                } else {
+                                    customAudioEl.addEventListener('seeked', onSeekReadyAndPlay, { once: true });
+                                    setTimeout(onSeekReadyAndPlay, 450); // 寻道超时安全保障
+                                }
                             } else {
-                                completeHandover();
+                                onSeekReadyAndPlay();
                             }
                         };
 
                         if (customAudioEl.src !== currentAudioUrl) {
                             customAudioEl.src = currentAudioUrl;
-                            const onCanPlay = () => {
-                                startPlayAudio();
-                                customAudioEl.removeEventListener('canplay', onCanPlay);
-                            };
-                            if (customAudioEl.readyState >= 2) {
-                                startPlayAudio();
+                            if (customAudioEl.readyState >= 1) {
+                                executeAudioSeekAndPlay();
                             } else {
-                                customAudioEl.addEventListener('canplay', onCanPlay);
+                                customAudioEl.addEventListener('loadedmetadata', executeAudioSeekAndPlay, { once: true });
                             }
                         } else {
-                            startPlayAudio();
+                            executeAudioSeekAndPlay();
                         }
 
-                        // 兜底超时：500ms 后强制暂停原视频，防止网络波动导致重音过久
-                        setTimeout(completeHandover, 500);
+                        // 安全看门狗：即使极端网络超时，也仅解除屏障锁，严禁将未就绪进度回写原视频
+                        setTimeout(() => {
+                            if (!handoverDone && transactionId === currentSwitchTransactionId) {
+                                isAudioHandoverPending = false;
+                            }
+                        }, 2500);
                     }
                 } else if (origVideo) {
                     // 核心平滑接力防静音：音频流拉取中，若原视频正在播放，不强行 pause 原视频，让其作为临时发声源！
@@ -1971,12 +2021,13 @@
 
                 clearInterval(trafficTimer);
                 trafficTimer = setInterval(() => {
-                    if (customAudioEl && !customAudioEl.paused) {
+                    if (customAudioEl && !customAudioEl.paused && !isAudioHandoverPending) {
                         syncAudioProgressToVideoAndStorage(false);
                     }
                 }, 1000);
             } else {
                 // 切换回【看视频】：平滑接力回原视频画面与声音
+                isAudioHandoverPending = false;
                 flushCurrentTrafficStats();
                 syncAudioProgressToVideoAndStorage(true);
                 const curTime = customAudioEl && Number.isFinite(customAudioEl.currentTime) ? customAudioEl.currentTime : 0;
@@ -2005,14 +2056,19 @@
                                 origVideo.currentTime = curTime;
                                 origVideo.dispatchEvent(new Event('timeupdate'));
                             } catch {}
-                            setTimeout(() => { isSyncingToNativeVideo = false; }, 120);
+                            const releaseLock = () => {
+                                origVideo.removeEventListener('seeked', releaseLock);
+                                isSyncingToNativeVideo = false;
+                            };
+                            origVideo.addEventListener('seeked', releaseLock, { once: true });
+                            setTimeout(releaseLock, 500);
                         }
                         try { origVideo.pause(); } catch {}
                     } else {
                         // 音频正在播放：让原视频定位起播，在原视频实际出声瞬间停止音频
                         let handoverDone = false;
                         const completeHandover = () => {
-                            if (handoverDone) return;
+                            if (handoverDone || transactionId !== currentSwitchTransactionId) return;
                             handoverDone = true;
                             if (customAudioEl) {
                                 try { customAudioEl.pause(); } catch {}
@@ -2025,13 +2081,19 @@
                                 origVideo.currentTime = curTime;
                                 origVideo.dispatchEvent(new Event('timeupdate'));
                             } catch {}
-                            setTimeout(() => { isSyncingToNativeVideo = false; }, 120);
+                            const releaseLock = () => {
+                                origVideo.removeEventListener('seeked', releaseLock);
+                                isSyncingToNativeVideo = false;
+                            };
+                            origVideo.addEventListener('seeked', releaseLock, { once: true });
+                            setTimeout(releaseLock, 500);
                         }
 
                         // 监听原视频出画面发声瞬间
                         origVideo.addEventListener('playing', completeHandover, { once: true });
 
                         const playOrig = () => {
+                            if (transactionId !== currentSwitchTransactionId) return;
                             const p = origVideo.play();
                             if (p && typeof p.catch === 'function') {
                                 p.catch(() => {
@@ -3149,7 +3211,9 @@
             });
             customAudioEl.addEventListener('timeupdate', () => {
                 updateCustomPlayerUI();
-                syncAudioProgressToVideoAndStorage(false);
+                if (!isAudioHandoverPending) {
+                    syncAudioProgressToVideoAndStorage(false);
+                }
             });
             customAudioEl.addEventListener('loadedmetadata', () => {
                 updateCustomPlayerUI();
@@ -3392,6 +3456,7 @@
         const handleVideoChange = () => {
             const currentKey = getVideoKey();
             isVideoSwitchPending = true;
+            isAudioHandoverPending = false; // 重置交接屏障锁
 
             // 0. 重置寻道锁与防抖状态
             if (pauseDebounceTimer) {
@@ -3403,6 +3468,12 @@
                 seekSettleTimer = null;
             }
             isSeekingOperation = false;
+
+            // 黑胶唱针平滑抬起复位，杜绝上一视频视觉残留
+            if (audioPanelEl) {
+                const needleEl = audioPanelEl.querySelector('#bili-vinyl-needle-wrap');
+                if (needleEl) needleEl.style.transform = 'rotate(-73deg)';
+            }
 
             // 1. 判断当前音源是否已经被网络请求提前解析并装载为新视频音频
             const isAlreadyNewVideoAudio = currentAudioVideoKey && (currentAudioVideoKey === currentKey);
@@ -3466,14 +3537,23 @@
                 setRepeatState(getRepeatState(), false);
                 updateToggleButtonState();
 
-                // 若新音源已经就绪（从缓存池中恢复），确保装载起播并继承有效进度
+                // 若新音源已经就绪（从缓存池中恢复），确保装载起播并在元数据就绪后平滑继承有效进度
                 if (currentAudioUrl && customAudioEl) {
                     if (customAudioEl.src !== currentAudioUrl) {
                         customAudioEl.src = currentAudioUrl;
                     }
                     const bestStart = getBestStartingTime(currentKey);
                     if (bestStart > 0) {
-                        try { customAudioEl.currentTime = bestStart; } catch {}
+                        const applyTime = () => {
+                            try { customAudioEl.currentTime = bestStart; } catch {}
+                            syncAudioProgressToVideoAndStorage(true);
+                            customAudioEl.removeEventListener('loadedmetadata', applyTime);
+                        };
+                        if (customAudioEl.readyState >= 1) {
+                            applyTime();
+                        } else {
+                            customAudioEl.addEventListener('loadedmetadata', applyTime, { once: true });
+                        }
                     }
                     customAudioEl.muted = getSavedUserMuted();
                     const curUserVol = getSavedUserVolume();
