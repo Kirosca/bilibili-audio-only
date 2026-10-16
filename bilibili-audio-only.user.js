@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.5
-// @description  一键切换纯音频省流模式，上线小宇宙现代播客大卡片播放风格与黑胶唱片双主题；深度修复开播数秒切听视频进度不同步与0秒倒灌缺陷（构建初次交接期全局同步屏障Handover Barrier与不可变原子时间戳快照、消灭寻道乒乓震荡）；引入模式切换事务令牌严格防抖与B站官方历史断点冲突消解机制；重构音频流全生命周期与时效性自愈引擎，视口尺寸记忆缓存消除切标签页微重排
+// @version      2.4.6
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；引入iOS拟态滑动开关（Toggle Switch）、倍速与音质毛玻璃向上竖向弹出菜单、右上角设置抽屉、纯正圆形主播放大按键与双向倍速自适应同步
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -57,7 +57,12 @@
         FORWARD_15: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/><text x="12" y="15.5" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text></svg>`,
         PODCAST: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>`,
         DISC: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>`,
-        THEME_SWITCH: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>`
+        THEME_SWITCH: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>`,
+        SETTINGS: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`,
+        CHEVRON_UP: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-left: 2px;"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+        PLAY_ROUND: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px; margin-left: 2px;"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
+        PAUSE_ROUND: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -1px;"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>`,
+        LOOP: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 9.5l1.5-1v7.5" stroke-width="2.2"/></svg>`
     };
 
     // 大面板视觉风格管理（播客卡片 podcast / 黑胶唱机 vinyl）
@@ -365,11 +370,17 @@
             origVideo.loop = isLoopEnabled;
         }
 
-        // 4. 立即更新大面板复选框 UI
+        // 4. 立即更新大面板循环 UI（滑动开关与图标按钮双向同步）
         if (audioPanelEl) {
             const loopSwitch = audioPanelEl.querySelector('#bili-setting-loop-switch');
             if (loopSwitch && loopSwitch.checked !== isLoopEnabled) {
                 loopSwitch.checked = isLoopEnabled;
+            }
+            const loopBtn = audioPanelEl.querySelector('#bili-btn-loop-mode');
+            if (loopBtn) {
+                loopBtn.style.color = isLoopEnabled ? '#00aeec' : 'inherit';
+                loopBtn.style.borderColor = isLoopEnabled ? '#00aeec' : 'rgba(127,127,127,0.2)';
+                loopBtn.style.background = isLoopEnabled ? 'rgba(0,174,236,0.15)' : 'transparent';
             }
         }
 
@@ -482,10 +493,11 @@
         const isPaused = customAudioEl.paused;
         const isDark = isBiliDarkMode();
 
-        btn.innerHTML = isPaused ? `${ICONS.PLAY}播放音频` : `${ICONS.PAUSE}暂停音频`;
-        btn.style.background = isPaused ? '#00aeec' : 'transparent';
-        btn.style.color = isPaused ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c');
-        btn.style.borderColor = isPaused ? '#00aeec' : (isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0');
+        btn.innerHTML = isPaused ? ICONS.PLAY_ROUND : ICONS.PAUSE_ROUND;
+        btn.style.background = '#00aeec';
+        btn.style.color = '#ffffff';
+        btn.style.border = 'none';
+        btn.title = isPaused ? '播放 (空格键)' : '暂停 (空格键)';
 
         // 网易云黑胶唱片旋转与唱针起落动效联动
         const discEl = audioPanelEl.querySelector('#bili-vinyl-disc');
@@ -1066,6 +1078,12 @@
             vinylTitleEl.textContent = meta.title;
             vinylTitleEl.title = meta.title;
         }
+        const vinylAuthorEl = audioPanelEl.querySelector('#bili-vinyl-author');
+        if (vinylAuthorEl) {
+            const authorText = meta.author || '哔哩哔哩 UP主';
+            vinylAuthorEl.textContent = authorText;
+            vinylAuthorEl.title = authorText;
+        }
 
         // 2. 小宇宙播客模式元素
         const podcastArtwork = audioPanelEl.querySelector('#bili-podcast-artwork');
@@ -1112,6 +1130,7 @@
 
         const podcastWrap = audioPanelEl.querySelector('#bili-podcast-wrap');
         const vinylWrap = audioPanelEl.querySelector('#bili-vinyl-wrap');
+        const vinylInfo = audioPanelEl.querySelector('#bili-vinyl-info');
         const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
         const btnBack15 = audioPanelEl.querySelector('#bili-btn-backward-15');
         const btnFwd15 = audioPanelEl.querySelector('#bili-btn-forward-15');
@@ -1120,6 +1139,7 @@
 
         if (podcastWrap) podcastWrap.style.display = isPodcast ? 'flex' : 'none';
         if (vinylWrap) vinylWrap.style.display = isPodcast ? 'none' : 'flex';
+        if (vinylInfo) vinylInfo.style.display = isPodcast ? 'none' : 'flex';
         if (vinylTitle) vinylTitle.style.display = isPodcast ? 'none' : 'block';
         if (btnBack15) btnBack15.style.display = isPodcast ? 'inline-flex' : 'none';
         if (btnFwd15) btnFwd15.style.display = isPodcast ? 'inline-flex' : 'none';
@@ -1741,43 +1761,41 @@
         setTimeout(doHandover, 500);
     }
 
-    // 渲染音频品质切换按钮列表
+    // 渲染音频品质切换列表（支持竖向毛玻璃弹出菜单与当前品质胶囊文本联动）
     function renderQualityButtons() {
         if (!audioPanelEl) return;
-        const listEl = audioPanelEl.querySelector('#bili-audio-quality-list');
-        if (!listEl) return;
-
-        listEl.innerHTML = '';
-        const isDark = isBiliDarkMode();
+        const menuEl = audioPanelEl.querySelector('#bili-quality-popup-menu');
+        const pillTextEl = audioPanelEl.querySelector('#bili-quality-pill-text');
 
         if (!availableAudioTracks || availableAudioTracks.length === 0) {
-            listEl.innerHTML = `<span style="opacity: 0.6; font-size: 12px;">默认标准音质</span>`;
+            if (pillTextEl) pillTextEl.textContent = '标准音质';
+            if (menuEl) menuEl.innerHTML = `<div class="bili-popup-menu-item active" style="cursor: default;">标准音质</div>`;
             return;
         }
 
-        availableAudioTracks.forEach(track => {
-            const btn = document.createElement('button');
-            btn.className = 'bili-quality-btn';
-            btn.dataset.id = track.id;
-            btn.textContent = track.label;
-            const isActive = String(track.id) === String(currentAudioQualityId);
-            if (isActive) btn.classList.add('active');
+        const activeTrack = availableAudioTracks.find(t => String(t.id) === String(currentAudioQualityId)) || availableAudioTracks[0];
+        if (pillTextEl && activeTrack) {
+            pillTextEl.textContent = activeTrack.label;
+        }
 
-            btn.style.cssText = `
-                border: none;
-                border-radius: 4px;
-                padding: 4px 10px;
-                cursor: pointer;
-                font-size: 12px;
-                transition: all 0.2s;
-                background: ${isActive ? '#00aeec' : (isDark ? '#2b2d31' : '#e3e5e7')};
-                color: ${isActive ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c')};
-                font-weight: ${isActive ? 'bold' : 'normal'};
-            `;
+        if (menuEl) {
+            menuEl.innerHTML = '';
+            availableAudioTracks.forEach(track => {
+                const item = document.createElement('button');
+                item.className = 'bili-popup-menu-item';
+                item.dataset.id = track.id;
+                item.textContent = track.label;
+                const isActive = String(track.id) === String(currentAudioQualityId);
+                if (isActive) item.classList.add('active');
 
-            btn.onclick = () => switchAudioQuality(track.id);
-            listEl.appendChild(btn);
-        });
+                item.onclick = (e) => {
+                    e.stopPropagation();
+                    switchAudioQuality(track.id);
+                    menuEl.classList.remove('show');
+                };
+                menuEl.appendChild(item);
+            });
+        }
     }
 
     // 检查并自动执行听视频模式（无缝进入）
@@ -1906,6 +1924,7 @@
 
                 if (customAudioEl && currentAudioUrl) {
                     syncVolumeVideoToAudio();
+                    syncPlaybackRate(false);
 
                     const maxDur = (typeof getCurrentMediaDuration === 'function') ? getCurrentMediaDuration() : (customAudioEl.duration || 0);
 
@@ -2044,6 +2063,7 @@
                 if (origVideo) {
                     origVideo.style.visibility = 'visible';
                     syncVolumeAudioToVideo();
+                    syncPlaybackRate(true);
 
                     if (!shouldPlay) {
                         // 音频处于暂停状态：直接同步时间并保持原视频暂停
@@ -2144,12 +2164,12 @@
     function applyThemeToPanel() {
         if (!audioPanelEl) return;
         const isDark = isBiliDarkMode();
+        audioPanelEl.setAttribute('data-dark', isDark ? 'true' : 'false');
 
         const panelCard = audioPanelEl.querySelector('#bili-audio-card');
         const vinylTitle = audioPanelEl.querySelector('#bili-vinyl-title');
-        const settingsBox = audioPanelEl.querySelector('#bili-audio-settings-box');
+        const vinylAuthor = audioPanelEl.querySelector('#bili-vinyl-author');
         const playPauseBtn = audioPanelEl.querySelector('#bili-btn-play-pause');
-        const audioEl = audioPanelEl.querySelector('#bili-native-audio');
 
         // 主背景
         audioPanelEl.style.background = isDark
@@ -2166,6 +2186,9 @@
         if (vinylTitle) {
             vinylTitle.style.color = isDark ? '#ffffff' : '#18191c';
         }
+        if (vinylAuthor) {
+            vinylAuthor.style.color = isDark ? '#c9ccd0' : '#4b5058';
+        }
 
         const podcastTitle = audioPanelEl.querySelector('#bili-podcast-title');
         if (podcastTitle) {
@@ -2176,20 +2199,13 @@
             podcastAuthor.style.color = isDark ? '#c9ccd0' : '#4b5058';
         }
 
-        if (settingsBox) {
-            settingsBox.style.background = 'transparent';
-            settingsBox.style.border = 'none';
-            settingsBox.style.color = isDark ? '#9499a0' : '#61666d';
+        if (playPauseBtn) {
+            playPauseBtn.style.color = '#ffffff';
+            playPauseBtn.style.background = '#00aeec';
+            playPauseBtn.style.border = 'none';
         }
 
-        if (playPauseBtn && customAudioEl) {
-            const isPaused = customAudioEl.paused;
-            playPauseBtn.style.color = isPaused ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c');
-            playPauseBtn.style.borderColor = isPaused ? '#00aeec' : (isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0');
-            playPauseBtn.style.background = isPaused ? '#00aeec' : 'transparent';
-        }
-
-        audioPanelEl.querySelectorAll('#bili-btn-restore, #bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
+        audioPanelEl.querySelectorAll('#bili-btn-backward-15, #bili-btn-forward-15, #bili-btn-toggle-settings').forEach(btn => {
             btn.style.color = isDark ? '#e3e5e7' : '#18191c';
             btn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0';
         });
@@ -2198,6 +2214,14 @@
         if (toggleStyleBtn) {
             toggleStyleBtn.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)';
             toggleStyleBtn.style.color = isDark ? '#9499a0' : '#61666d';
+        }
+
+        const loopBtn = audioPanelEl.querySelector('#bili-btn-loop-mode');
+        if (loopBtn) {
+            const isLoop = getRepeatState();
+            loopBtn.style.color = isLoop ? '#00aeec' : (isDark ? '#e3e5e7' : '#18191c');
+            loopBtn.style.borderColor = isLoop ? '#00aeec' : (isDark ? 'rgba(255,255,255,0.2)' : '#c9ccd0');
+            loopBtn.style.background = isLoop ? 'rgba(0,174,236,0.15)' : 'transparent';
         }
 
         const progressTrack = audioPanelEl.querySelector('#bili-audio-progress-track');
@@ -2210,21 +2234,60 @@
         }
         updateCustomPlayerUI();
 
-        audioPanelEl.querySelectorAll('.bili-rate-btn').forEach(btn => {
-            const isActive = btn.classList.contains('active');
-            btn.style.background = isActive ? '#00aeec' : (isDark ? '#2b2d31' : '#e3e5e7');
-            btn.style.color = isActive ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c');
+        // 胶囊类按钮（倍速、音质、下载等）自适应背景与边框
+        audioPanelEl.querySelectorAll('.bili-pill-btn:not(#bili-btn-restore)').forEach(btn => {
+            btn.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+            btn.style.borderColor = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)';
+            btn.style.color = isDark ? '#e3e5e7' : '#18191c';
         });
 
-        audioPanelEl.querySelectorAll('.bili-quality-btn').forEach(btn => {
+        // 竖向弹出菜单项高亮处理
+        audioPanelEl.querySelectorAll('.bili-popup-menu-item').forEach(btn => {
             const isActive = btn.classList.contains('active');
-            btn.style.background = isActive ? '#00aeec' : (isDark ? '#2b2d31' : '#e3e5e7');
+            btn.style.background = isActive ? '#00aeec' : 'transparent';
             btn.style.color = isActive ? '#ffffff' : (isDark ? '#e3e5e7' : '#18191c');
         });
 
         updateMemoryStatusDisplay();
+        updateSpeedUI();
         applyThemeStyleToUI();
         updateAudioCardResponsiveSize();
+    }
+
+    // 更新倍速胶囊文本与弹出菜单高亮项
+    function updateSpeedUI() {
+        if (!audioPanelEl || !customAudioEl) return;
+        const curRate = customAudioEl.playbackRate || 1.0;
+        const pillText = audioPanelEl.querySelector('#bili-speed-pill-text');
+        if (pillText) {
+            pillText.textContent = `${curRate}x`;
+        }
+        audioPanelEl.querySelectorAll('#bili-speed-popup-menu .bili-popup-menu-item').forEach(item => {
+            const r = parseFloat(item.dataset.rate);
+            if (Math.abs(r - curRate) < 0.01) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    // 双向同步播放倍速
+    function syncPlaybackRate(fromAudioToVideo = false) {
+        const origVideo = getOriginalVideo();
+        if (!origVideo || !customAudioEl) return;
+        try {
+            if (fromAudioToVideo) {
+                if (typeof customAudioEl.playbackRate === 'number' && customAudioEl.playbackRate > 0) {
+                    origVideo.playbackRate = customAudioEl.playbackRate;
+                }
+            } else {
+                if (typeof origVideo.playbackRate === 'number' && origVideo.playbackRate > 0) {
+                    customAudioEl.playbackRate = origVideo.playbackRate;
+                }
+            }
+            updateSpeedUI();
+        } catch {}
     }
 
     // 11. 更新设置与记忆状态展示（仅驱动大面板中的设置与状态）
@@ -2246,12 +2309,17 @@
             loopSwitch.checked = getRepeatState();
         }
 
+        const memorySwitch = audioPanelEl.querySelector('#bili-setting-memory-switch');
+        if (memorySwitch) {
+            memorySwitch.checked = (mem !== undefined ? Boolean(mem) : Boolean(globalDef));
+        }
+
         if (statusEl) {
             let newHTML = '';
             if (mem !== undefined) {
-                newHTML = `<span style="display: inline-flex; align-items: center;">${ICONS.PIN}独立记忆：<span style="color: ${mem ? '#4cd964' : '#ff6699'}; font-weight: bold;">${mem ? '已开启' : '已关闭'}</span></span>`;
+                newHTML = `<span style="display: inline-flex; align-items: center; gap: 2px;">${ICONS.PIN}<span style="color: ${mem ? '#4cd964' : '#ff6699'}; font-weight: 600;">${mem ? '已记忆听视频' : '已记忆看视频'}</span></span>`;
             } else {
-                newHTML = `<span style="display: inline-flex; align-items: center;">${ICONS.GLOBE}跟随默认：<span style="color: ${globalDef ? '#4cd964' : '#999999'}; font-weight: bold;">${globalDef ? '开启' : '关闭'}</span></span>`;
+                newHTML = `<span style="display: inline-flex; align-items: center; gap: 2px;">${ICONS.GLOBE}<span style="color: ${globalDef ? '#4cd964' : 'inherit'}; opacity: 0.8;">跟随全局默认</span></span>`;
             }
 
             if (newHTML !== lastMemoryStatusHTML) {
@@ -2479,42 +2547,46 @@
             podcastTitleEl.style.marginBottom = isCompactHeight ? '2px' : '4px';
         }
 
-        // 主控播放/暂停与恢复视频按钮尺寸
-        panelCard.querySelectorAll('#bili-btn-play-pause, #bili-btn-restore').forEach(btn => {
-            btn.style.padding = ctrlBtnPadding;
-            btn.style.fontSize = ctrlBtnFontSize;
-        });
+        const vinylInfoEl = panelCard.querySelector('#bili-vinyl-info');
+        if (vinylInfoEl) {
+            vinylInfoEl.style.display = isPodcast ? 'none' : 'flex';
+        }
+
+        // 主控纯圆大播放按键尺寸适配（网易云/小宇宙规范）
+        const mainPlayBtn = panelCard.querySelector('#bili-btn-play-pause');
+        if (mainPlayBtn) {
+            const playBtnSize = isCompactHeight ? '38px' : (isSpaciousHeight ? '48px' : '44px');
+            mainPlayBtn.style.width = playBtnSize;
+            mainPlayBtn.style.height = playBtnSize;
+            mainPlayBtn.style.minWidth = playBtnSize;
+            mainPlayBtn.style.minHeight = playBtnSize;
+        }
 
         // 播客专属 ±15s 快退快进按钮尺寸
         panelCard.querySelectorAll('#bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
             btn.style.display = isPodcast ? 'inline-flex' : 'none';
-            const btnD = isCompactHeight ? '30px' : (isSpaciousHeight ? '36px' : '34px');
+            const btnD = isCompactHeight ? '28px' : (isSpaciousHeight ? '34px' : '32px');
             btn.style.width = btnD;
             btn.style.height = btnD;
         });
 
-        // 倍速按钮尺寸
-        panelCard.querySelectorAll('.bili-rate-btn').forEach(btn => {
-            btn.style.padding = rateBtnPadding;
-            btn.style.fontSize = rateBtnFontSize;
+        // 胶囊类辅助按钮尺寸适配
+        panelCard.querySelectorAll('.bili-pill-btn').forEach(btn => {
+            btn.style.padding = isCompactHeight ? '2px 8px' : '3px 10px';
+            btn.style.fontSize = isCompactHeight ? '10.5px' : '11px';
         });
 
-        // 底部居中按钮组与右下角小开关防重叠适配
-        const bottomCtrlWrap = panelCard.querySelector('#bili-audio-bottom-bar');
-        const settingsBox = panelCard.querySelector('#bili-audio-settings-box');
-        if (bottomCtrlWrap && settingsBox) {
+        // 响应式微调底栏布局
+        const mainCtrlRow = panelCard.querySelector('#bili-audio-main-controls');
+        if (mainCtrlRow) {
             if (w < 480) {
-                bottomCtrlWrap.style.flexDirection = 'column';
-                bottomCtrlWrap.style.gap = '6px';
-                settingsBox.style.position = 'static';
-                settingsBox.style.alignItems = 'center';
+                mainCtrlRow.style.flexWrap = 'wrap';
+                mainCtrlRow.style.justifyContent = 'center';
+                mainCtrlRow.style.gap = '8px';
             } else {
-                bottomCtrlWrap.style.flexDirection = 'row';
-                bottomCtrlWrap.style.gap = '0px';
-                settingsBox.style.position = 'absolute';
-                settingsBox.style.right = '0';
-                settingsBox.style.bottom = '0';
-                settingsBox.style.alignItems = 'flex-end';
+                mainCtrlRow.style.flexWrap = 'nowrap';
+                mainCtrlRow.style.justifyContent = 'space-between';
+                mainCtrlRow.style.gap = '0px';
             }
         }
     }
@@ -2852,6 +2924,8 @@
                     max-height: calc(100% - 16px);
                     box-sizing: border-box;
                     transition: width 0.25s cubic-bezier(0.25, 1, 0.5, 1), max-width 0.25s cubic-bezier(0.25, 1, 0.5, 1), padding 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
                 }
                 html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-disc,
                 html body #bili-audio-theme-panel #bili-audio-card #bili-vinyl-wrap #bili-vinyl-disc.bili-vinyl-disc,
@@ -2875,7 +2949,7 @@
                     transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
                 }
                 .bili-slider-wrap:hover .bili-slider-track {
-                    height: 7px !important;
+                    height: 6px !important;
                 }
                 .bili-slider-wrap:hover .bili-slider-thumb {
                     transform: translate(-50%, -50%) scale(1.25) !important;
@@ -2884,10 +2958,6 @@
                 .bpx-player-ctrl-volume-progress-bar,
                 .bpx-player-ctrl-volume-progress-inner {
                     background-color: #00aeec !important;
-                }
-                #bili-audio-download-btn:hover {
-                    opacity: 1 !important;
-                    background: rgba(127,127,127,0.18) !important;
                 }
                 @keyframes bili-vinyl-spin {
                     from { transform: rotate(0deg); }
@@ -2903,17 +2973,257 @@
                 #bili-podcast-artwork:hover {
                     filter: brightness(1.05);
                 }
-                #bili-btn-backward-15:hover,
-                #bili-btn-forward-15:hover {
-                    background: rgba(127,127,127,0.18) !important;
+
+                /* 纯正圆形主播放大按键（网易云/小宇宙规范） */
+                .bili-main-play-btn {
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 50% !important;
+                    background: #00aeec !important;
+                    border: none !important;
+                    outline: none !important;
+                    color: #ffffff !important;
+                    cursor: pointer;
+                    display: flex !important;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 14px rgba(0, 174, 236, 0.4);
+                    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background-color 0.2s ease;
+                    flex-shrink: 0;
+                    padding: 0 !important;
+                }
+                .bili-main-play-btn:hover {
+                    transform: scale(1.08);
+                    background: #00b8f6 !important;
+                    box-shadow: 0 6px 20px rgba(0, 174, 236, 0.55);
+                }
+                .bili-main-play-btn:active {
+                    transform: scale(0.94);
+                }
+
+                /* 辅助纯圆图标按键（快退/快进/设置齿轮） */
+                .bili-circle-btn {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50% !important;
+                    background: transparent;
+                    border: 1px solid rgba(127,127,127,0.22);
+                    color: inherit;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s ease;
+                    flex-shrink: 0;
+                    padding: 0;
+                }
+                .bili-circle-btn:hover {
+                    background: rgba(127,127,127,0.18);
                     transform: scale(1.06);
                 }
-                #bili-btn-toggle-style:hover {
-                    opacity: 1 !important;
-                    background: rgba(127,127,127,0.18) !important;
+
+                .bili-icon-btn {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50% !important;
+                    background: transparent;
+                    border: 1px solid rgba(127,127,127,0.2);
+                    color: inherit;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s ease;
+                    flex-shrink: 0;
+                    padding: 0;
                 }
+                .bili-icon-btn:hover {
+                    background: rgba(127,127,127,0.18);
+                    transform: scale(1.06);
+                }
+
+                /* 精致胶囊药丸按钮（倍速、音质、下载、看视频） */
+                .bili-pill-btn {
+                    background: rgba(127,127,127,0.12);
+                    border: 1px solid rgba(127,127,127,0.2);
+                    border-radius: 14px !important;
+                    padding: 3px 10px;
+                    font-size: 11px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    color: inherit;
+                    transition: all 0.2s ease;
+                    white-space: nowrap;
+                    user-select: none;
+                }
+                .bili-pill-btn:hover {
+                    background: rgba(127,127,127,0.22);
+                }
+
+                /* 向上竖向展开毛玻璃选择菜单 */
+                .bili-popup-menu {
+                    display: none;
+                    position: absolute;
+                    bottom: calc(100% + 8px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(30, 32, 36, 0.95);
+                    backdrop-filter: blur(14px);
+                    -webkit-backdrop-filter: blur(14px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 8px;
+                    padding: 4px;
+                    flex-direction: column;
+                    gap: 2px;
+                    min-width: 68px;
+                    z-index: 60;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+                }
+                .bili-popup-menu.show {
+                    display: flex !important;
+                }
+                .bili-popup-menu-item {
+                    background: none;
+                    border: none;
+                    padding: 4px 10px;
+                    font-size: 11px;
+                    color: #e3e5e7;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    text-align: center;
+                    white-space: nowrap;
+                    transition: background 0.15s ease, color 0.15s ease;
+                    font-family: inherit;
+                }
+                .bili-popup-menu-item:hover {
+                    background: rgba(255, 255, 255, 0.14);
+                    color: #ffffff;
+                }
+                .bili-popup-menu-item.active {
+                    background: #00aeec !important;
+                    color: #ffffff !important;
+                    font-weight: 600;
+                }
+
+                /* 右上角偏好设置悬浮抽屉 */
+                .bili-settings-drawer {
+                    display: none;
+                    position: absolute;
+                    top: calc(100% + 8px);
+                    right: 0;
+                    width: 230px;
+                    background: rgba(30, 32, 36, 0.96);
+                    backdrop-filter: blur(16px);
+                    -webkit-backdrop-filter: blur(16px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 10px;
+                    padding: 12px 14px;
+                    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+                    z-index: 100;
+                    flex-direction: column;
+                    gap: 10px;
+                    text-align: left;
+                    user-select: none;
+                }
+                .bili-settings-drawer.open {
+                    display: flex !important;
+                }
+                .bili-setting-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                }
+                .bili-setting-label {
+                    display: flex;
+                    flex-direction: column;
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                .bili-setting-sub {
+                    font-size: 9.5px;
+                    opacity: 0.6;
+                    margin-top: 1px;
+                }
+                .bili-text-link {
+                    background: none;
+                    border: none;
+                    color: #00aeec;
+                    cursor: pointer;
+                    padding: 0;
+                    font-size: 10px;
+                    text-decoration: underline;
+                }
+
+                /* iOS 拟态左右平滑滑动开关（Toggle Switch） */
+                .bili-toggle-switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 32px;
+                    height: 18px;
+                    cursor: pointer;
+                    flex-shrink: 0;
+                    margin: 0;
+                }
+                .bili-toggle-switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                    position: absolute;
+                    margin: 0;
+                }
+                .bili-toggle-slider {
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background-color: rgba(127, 127, 127, 0.35);
+                    transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+                    border-radius: 18px;
+                }
+                .bili-toggle-slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 14px;
+                    width: 14px;
+                    left: 2px;
+                    bottom: 2px;
+                    background-color: white;
+                    transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+                    border-radius: 50%;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                }
+                .bili-toggle-switch input:checked + .bili-toggle-slider {
+                    background-color: #00aeec;
+                }
+                .bili-toggle-switch input:checked + .bili-toggle-slider:before {
+                    transform: translateX(14px);
+                }
+
+                /* 浅色模式主题适配覆盖 */
+                #bili-audio-theme-panel[data-dark="false"] .bili-popup-menu {
+                    background: rgba(255, 255, 255, 0.96);
+                    border-color: rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-popup-menu-item {
+                    color: #18191c;
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-popup-menu-item:hover {
+                    background: rgba(0, 0, 0, 0.06);
+                    color: #18191c;
+                }
+                #bili-audio-theme-panel[data-dark="false"] .bili-settings-drawer {
+                    background: rgba(255, 255, 255, 0.96);
+                    border-color: rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+                    color: #18191c;
+                }
+
                 /* 双主题互斥展示强保障（避免外部样式或尺寸计算覆盖导致黑胶/播客重叠显示） */
                 #bili-audio-card[data-style="podcast"] #bili-vinyl-wrap,
+                #bili-audio-card[data-style="podcast"] #bili-vinyl-info,
                 #bili-audio-card[data-style="podcast"] #bili-vinyl-title {
                     display: none !important;
                 }
@@ -2933,8 +3243,8 @@
                 #bili-audio-card[data-style="vinyl"] #bili-vinyl-wrap {
                     display: flex !important;
                 }
-                #bili-audio-card[data-style="vinyl"] #bili-vinyl-title {
-                    display: block !important;
+                #bili-audio-card[data-style="vinyl"] #bili-vinyl-info {
+                    display: flex !important;
                 }
             `;
             (document.head || document.documentElement).appendChild(panelStyle);
@@ -2973,22 +3283,79 @@
         });
 
         audioPanelEl.innerHTML = `
-            <div id="bili-audio-card" data-style="${getPanelThemeStyle()}" style="border: 1px solid; border-radius: 10px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.2s; position: relative;">
-                <!-- 纯音频/播客模式小标识 -->
-                <div id="bili-audio-mode-badge" style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; opacity: 0.65; margin-bottom: 2px;">
-                    <span style="display: inline-flex; align-items: center;">${ICONS.PODCAST}播客模式</span>
-                    <span>•</span>
-                    <span>画面已阻断</span>
-                </div>
+            <div id="bili-audio-card" data-style="${getPanelThemeStyle()}" style="border: 1px solid; border-radius: 12px; padding: 12px 20px; width: 70%; max-width: 880px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; transition: all 0.25s ease; position: relative;">
+                
+                <!-- 顶部栏：左侧风格切换胶囊，中间收听标识，右侧设置齿轮与悬浮抽屉 -->
+                <div id="bili-audio-top-bar" style="width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; position: relative; z-index: 30;">
+                    <!-- 左侧风格切换按钮 -->
+                    <button id="bili-btn-toggle-style" class="bili-pill-btn" title="切换视觉风格（网易云黑胶 / 小宇宙播客）">
+                        <span id="bili-style-text" style="display: inline-flex; align-items: center; gap: 4px;">${ICONS.PODCAST}播客</span>
+                    </button>
 
-                <!-- 黑胶模式专属曲目标题（黑胶模式显示，播客模式隐藏） -->
-                <div id="bili-vinyl-title" style="display: none; font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default;" title="">
-                    Bilibili 纯音频模式
+                    <!-- 中间模式徽章（淡雅居中） -->
+                    <div id="bili-audio-mode-badge" style="display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.65;">
+                        <span style="display: inline-flex; align-items: center;">${ICONS.PODCAST}播客模式</span>
+                        <span>•</span>
+                        <span>画面已阻断</span>
+                    </div>
+
+                    <!-- 右侧设置按钮及悬浮设置抽屉 -->
+                    <div style="position: relative;">
+                        <button id="bili-btn-toggle-settings" class="bili-icon-btn" title="偏好设置">
+                            ${ICONS.SETTINGS}
+                        </button>
+
+                        <!-- 悬浮偏好设置抽屉 -->
+                        <div id="bili-audio-settings-drawer" class="bili-settings-drawer">
+                            <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px; opacity: 0.9; display: flex; align-items: center; justify-content: space-between;">
+                                <span>播放偏好</span>
+                                <span id="bili-memory-status-text" style="font-size: 10px; font-weight: normal; opacity: 0.8;"></span>
+                            </div>
+                            
+                            <!-- 设置项 1：新视频默认听视频 -->
+                            <div class="bili-setting-item">
+                                <div class="bili-setting-label">
+                                    <span>新视频默认开启</span>
+                                    <span class="bili-setting-sub">打开视频时自动进入听视频</span>
+                                </div>
+                                <label class="bili-toggle-switch">
+                                    <input type="checkbox" id="bili-setting-default-switch">
+                                    <span class="bili-toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- 设置项 2：单曲循环 -->
+                            <div class="bili-setting-item">
+                                <div class="bili-setting-label">
+                                    <span>单曲循环</span>
+                                    <span class="bili-setting-sub">与官方播放器洗脑循环联动</span>
+                                </div>
+                                <label class="bili-toggle-switch">
+                                    <input type="checkbox" id="bili-setting-loop-switch">
+                                    <span class="bili-toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- 设置项 3：独立记忆本视频 -->
+                            <div class="bili-setting-item">
+                                <div class="bili-setting-label">
+                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                        <span>独立记忆模式</span>
+                                        <button id="bili-btn-reset-memory" class="bili-text-link" title="清除本视频独立记忆">清除</button>
+                                    </div>
+                                    <span class="bili-setting-sub">单独记住此视频是否听视频</span>
+                                </div>
+                                <label class="bili-toggle-switch">
+                                    <input type="checkbox" id="bili-setting-memory-switch">
+                                    <span class="bili-toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 小宇宙现代播客大卡片交互视窗（16:9 原比例高质感大圆角封面 + 弥散流光光晕） -->
                 <div id="bili-podcast-wrap" style="position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 4px 0 10px 0; user-select: none;">
-                    <!-- 播客封面容器（叠加弥散光晕与16:9圆角大卡片） -->
                     <div style="position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
                         <!-- 弥散环境光晕层 -->
                         <div id="bili-podcast-ambient-glow" style="position: absolute; width: 92%; height: 88%; border-radius: 16px; filter: blur(22px); opacity: 0.55; z-index: 1; pointer-events: none; transition: opacity 0.3s ease, width 0.25s ease, height 0.25s ease;"></div>
@@ -3001,30 +3368,26 @@
                             </div>
                         </div>
                     </div>
-                    <!-- 播客模式视频大标题 -->
+                    <!-- 播客模式视频大标题与主播信息 -->
                     <div id="bili-podcast-title" style="font-size: 15px; font-weight: 600; text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; cursor: default;" title="">
                         Bilibili 纯音频播客
                     </div>
-                    <!-- UP 主创作者信息 -->
                     <div id="bili-podcast-author" style="display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; opacity: 0.8; margin-bottom: 2px;">
-                        <span style="opacity: 0.7;">UP主:</span>
+                        <span style="opacity: 0.7;">主播:</span>
                         <span id="bili-podcast-author-name" style="font-weight: 500; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">哔哩哔哩 UP主</span>
                     </div>
                 </div>
 
                 <!-- 网易云黑胶唱片与留声机唱针交互区 -->
-                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: none; align-items: center; justify-content: center; margin: 2px 0 10px 0; user-select: none;">
+                <div id="bili-vinyl-wrap" style="position: relative; width: 220px; height: 200px; display: none; align-items: center; justify-content: center; margin: 2px 0 6px 0; user-select: none;">
                     <!-- 仿真留声机唱针缩放定位容器 -->
                     <div id="bili-vinyl-needle-scaler" style="position: absolute; top: -16px; left: 108px; width: 44px; height: 102px; pointer-events: none; z-index: 10; transform-origin: 16px 16px; transform: scale(1); transition: left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1), transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);">
                         <div id="bili-vinyl-needle-wrap" style="width: 44px; height: 102px; transform-origin: 16px 16px; transform: rotate(-73deg); transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));">
                             <svg width="44" height="102" viewBox="0 0 44 102" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <!-- 唱针转轴底座 -->
                                 <circle cx="16" cy="16" r="14" fill="#2d3035" stroke="#4b5058" stroke-width="2.5"/>
                                 <circle cx="16" cy="16" r="7" fill="#6b7280"/>
                                 <circle cx="16" cy="16" r="3" fill="#1f2124"/>
-                                <!-- 唱针悬臂杆 -->
                                 <path d="M16 16 L22 72 L16 92" stroke="#d1d5db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                                <!-- 唱头/唱针尖 -->
                                 <rect x="8" y="88" width="16" height="10" rx="2" fill="#1f2124" stroke="#9ca3af" stroke-width="1.5" transform="rotate(-12 16 93)"/>
                             </svg>
                         </div>
@@ -3040,101 +3403,100 @@
                     </div>
                 </div>
 
+                <!-- 黑胶模式曲目标题与 UP 主（网易云居中排版） -->
+                <div id="bili-vinyl-info" style="display: none; flex-direction: column; align-items: center; justify-content: center; margin-top: 4px; margin-bottom: 8px; max-width: 90%; text-align: center; user-select: none;">
+                    <div id="bili-vinyl-title" style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; cursor: default;" title="">
+                        Bilibili 纯音频模式
+                    </div>
+                    <div id="bili-vinyl-author" style="font-size: 12px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; margin-top: 2px; cursor: default;" title="">
+                        哔哩哔哩 UP主
+                    </div>
+                </div>
+
                 <!-- 底层原生音频驱动节点（隐藏 controls，由自定义 UI 精确驱动） -->
                 <audio id="bili-native-audio" style="display: none;"></audio>
 
-                <!-- 自定义纯音频控制器（进度条已播段与音量0~当前大小填充段均采用B站官方主题蓝 #00aeec） -->
-                <div id="bili-audio-control-bar" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; box-sizing: border-box; user-select: none;">
-                    <!-- 播放进度条区域 -->
+                <!-- 自定义纯音频控制器 -->
+                <div id="bili-audio-control-bar" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; box-sizing: border-box; user-select: none;">
+                    <!-- 1. 播放进度条区域 -->
                     <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                         <span id="bili-audio-time-current" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.8; min-width: 42px; text-align: right;">00:00</span>
-                        <div id="bili-audio-progress-wrap" class="bili-slider-wrap" style="flex: 1; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
+                        <div id="bili-audio-progress-wrap" class="bili-slider-wrap" style="flex: 1; height: 20px; display: flex; align-items: center; cursor: pointer; position: relative;">
                             <div id="bili-audio-progress-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
-                                <!-- 已经播放的进度条部分（B站蓝色） -->
                                 <div id="bili-audio-progress-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
-                                <!-- 进度滑块小圆点（实心蓝色非中空） -->
                                 <div id="bili-audio-progress-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
                             </div>
                         </div>
                         <span id="bili-audio-time-total" style="font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.6; min-width: 42px;">00:00</span>
                     </div>
 
-                    <!-- 下载音频与音量调节区域（下载按钮位于音量调节模块左侧） -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 2px;">
-                        <button id="bili-audio-download-btn" style="background: none; border: none; padding: 3px 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; color: inherit; opacity: 0.85; border-radius: 4px; transition: all 0.2s;" title="下载当前音频文件">
-                            ${ICONS.DOWNLOAD}
-                            <span>下载音频</span>
-                        </button>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
-                                ${ICONS.VOLUME_HIGH}
+                    <!-- 2. 主控按键与胶囊选项行 -->
+                    <div id="bili-audio-main-controls" style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 2px 0;">
+                        <!-- 左侧快捷组：循环模式按钮、下载音频按钮、音量条 -->
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button id="bili-btn-loop-mode" class="bili-pill-btn" title="单曲循环播放切换">
+                                ${ICONS.LOOP}
                             </button>
-                            <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 80px; height: 22px; display: flex; align-items: center; cursor: pointer; position: relative;">
-                                <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 5px; border-radius: 3px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
-                                    <!-- 音量0~音量大小那一段（B站蓝色） -->
-                                    <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 3px; pointer-events: none;"></div>
-                                    <!-- 音量滑块小圆点（实心蓝色非中空） -->
-                                    <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
+                            <button id="bili-audio-download-btn" class="bili-pill-btn" title="下载当前音频直链">
+                                ${ICONS.DOWNLOAD}
+                                <span>下载</span>
+                            </button>
+                            <div style="display: flex; align-items: center; gap: 4px; margin-left: 2px;">
+                                <button id="bili-audio-volume-btn" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; color: inherit; opacity: 0.85;" title="静音/取消静音">
+                                    ${ICONS.VOLUME_HIGH}
+                                </button>
+                                <div id="bili-audio-volume-wrap" class="bili-slider-wrap" style="width: 66px; height: 20px; display: flex; align-items: center; cursor: pointer; position: relative;">
+                                    <div id="bili-audio-volume-track" class="bili-slider-track" style="width: 100%; height: 4px; border-radius: 2px; background: rgba(127,127,127,0.25); position: relative; transition: height 0.15s ease;">
+                                        <div id="bili-audio-volume-bar" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: #00aeec; border-radius: 2px; pointer-events: none;"></div>
+                                        <div id="bili-audio-volume-thumb" class="bili-slider-thumb" style="position: absolute; top: 50%; left: 100%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: #00aeec; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; transition: transform 0.15s ease;"></div>
+                                    </div>
+                                </div>
+                                <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 30px;">100%</span>
+                            </div>
+                        </div>
+
+                        <!-- 中间主播放区：小宇宙±15s + 网易云纯圆大播放键 -->
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <button id="bili-btn-backward-15" class="bili-circle-btn" style="display: none;" title="快退 15 秒">
+                                ${ICONS.BACKWARD_15}
+                            </button>
+                            <button id="bili-btn-play-pause" class="bili-main-play-btn" title="播放/暂停 (空格键)">
+                                ${ICONS.PAUSE_ROUND}
+                            </button>
+                            <button id="bili-btn-forward-15" class="bili-circle-btn" style="display: none;" title="快进 15 秒">
+                                ${ICONS.FORWARD_15}
+                            </button>
+                        </div>
+
+                        <!-- 右侧功能组：倍速胶囊（竖向菜单）、音质胶囊（竖向菜单）、恢复看视频 -->
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <div class="bili-dropdown-container" id="bili-speed-container" style="position: relative;">
+                                <button id="bili-speed-pill-btn" class="bili-pill-btn" title="播放倍速调节">
+                                    <span id="bili-speed-pill-text">1.0x</span>
+                                    ${ICONS.CHEVRON_UP}
+                                </button>
+                                <div id="bili-speed-popup-menu" class="bili-popup-menu">
+                                    <button class="bili-popup-menu-item" data-rate="2.0">2.0x</button>
+                                    <button class="bili-popup-menu-item" data-rate="1.5">1.5x</button>
+                                    <button class="bili-popup-menu-item" data-rate="1.25">1.25x</button>
+                                    <button class="bili-popup-menu-item active" data-rate="1.0">1.0x</button>
+                                    <button class="bili-popup-menu-item" data-rate="0.75">0.75x</button>
+                                    <button class="bili-popup-menu-item" data-rate="0.5">0.5x</button>
                                 </div>
                             </div>
-                            <span id="bili-audio-volume-text" style="font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; min-width: 34px;">100%</span>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- 音质与倍速并排控制区 -->
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-                    <div id="bili-audio-quality-section" style="display: flex; gap: 6px; align-items: center; font-size: 12px;">
-                        <span style="opacity: 0.8; font-weight: 500;">音质：</span>
-                        <div id="bili-audio-quality-list" style="display: flex; gap: 4px; flex-wrap: wrap;"></div>
-                    </div>
-                    <div style="display: flex; gap: 6px; align-items: center; font-size: 12px;">
-                        <span style="opacity: 0.8; font-weight: 500;">倍速：</span>
-                        <button class="bili-rate-btn" data-rate="0.5" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">0.5</button>
-                        <button class="bili-rate-btn" data-rate="0.75" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">0.75</button>
-                        <button class="bili-rate-btn active" data-rate="1.0" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">1.0</button>
-                        <button class="bili-rate-btn" data-rate="1.25" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">1.25</button>
-                        <button class="bili-rate-btn" data-rate="1.5" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">1.5</button>
-                        <button class="bili-rate-btn" data-rate="2.0" style="border:none; border-radius:4px; padding:3px 7px; font-size:11px; cursor:pointer;">2.0</button>
-                    </div>
-                </div>
+                            <div class="bili-dropdown-container" id="bili-quality-container" style="position: relative;">
+                                <button id="bili-quality-pill-btn" class="bili-pill-btn" title="音频品质切换">
+                                    <span id="bili-quality-pill-text">标准音质</span>
+                                    ${ICONS.CHEVRON_UP}
+                                </button>
+                                <div id="bili-quality-popup-menu" class="bili-popup-menu"></div>
+                            </div>
 
-                <!-- 底部操作区（居中主控按钮 + 右下角微型开关组） -->
-                <div id="bili-audio-bottom-bar" style="width: 100%; display: flex; justify-content: center; align-items: center; position: relative; margin-top: 2px;">
-                    <!-- 居中播放/暂停与恢复视频 -->
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <button id="bili-btn-backward-15" style="display: none; background: transparent; border: 1px solid; border-radius: 50%; width: 34px; height: 34px; padding: 0; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center;" title="快退 15 秒">
-                            ${ICONS.BACKWARD_15}
-                        </button>
-                        <button id="bili-btn-play-pause" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
-                            ${ICONS.PAUSE}暂停音频
-                        </button>
-                        <button id="bili-btn-forward-15" style="display: none; background: transparent; border: 1px solid; border-radius: 50%; width: 34px; height: 34px; padding: 0; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center;" title="快进 15 秒">
-                            ${ICONS.FORWARD_15}
-                        </button>
-                        <button id="bili-btn-restore" style="background: transparent; border: 1px solid; border-radius: 6px; padding: 6px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;">
-                            ${ICONS.SCREEN}恢复看视频
-                        </button>
-                    </div>
-
-                    <!-- 右下角紧凑小开关区与风格切换按钮 -->
-                    <div id="bili-audio-settings-box" style="position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; opacity: 0.85; user-select: none;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="新视频默认开启听视频">
-                                <input type="checkbox" id="bili-setting-default-switch" style="cursor: pointer; width: 12px; height: 12px; accent-color: #00aeec; margin: 0;">
-                                <span>默认开启</span>
-                            </label>
-                            <label style="display: inline-flex; align-items: center; gap: 3px; cursor: pointer;" title="单曲循环播放（与B站单集循环联动）">
-                                <input type="checkbox" id="bili-setting-loop-switch" style="cursor: pointer; width: 12px; height: 12px; accent-color: #00aeec; margin: 0;">
-                                <span>单曲循环</span>
-                            </label>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 6px; font-size: 10px;">
-                            <button id="bili-btn-toggle-style" style="background: transparent; border: 1px solid; border-radius: 4px; padding: 1px 6px; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 10px; transition: all 0.2s;" title="切换卡片视觉风格（小宇宙播客 / 网易云黑胶）">
-                                <span id="bili-style-text" style="display: inline-flex; align-items: center; gap: 2px;">${ICONS.PODCAST}风格: 播客</span>
+                            <button id="bili-btn-restore" class="bili-pill-btn" style="color: #00aeec; border-color: rgba(0,174,236,0.35);" title="恢复看视频">
+                                ${ICONS.SCREEN}
+                                <span>看视频</span>
                             </button>
-                            <div id="bili-memory-status-text"></div>
-                            <button id="bili-btn-reset-memory" style="background: none; border: none; color: #00aeec; cursor: pointer; padding: 0; font-size: 10px; text-decoration: underline;" title="清除本视频独立记忆">清除记忆</button>
                         </div>
                     </div>
                 </div>
@@ -3258,12 +3620,97 @@
             };
         }
 
+        // 单曲循环底栏快捷胶囊按钮
+        const loopModeBtn = audioPanelEl.querySelector('#bili-btn-loop-mode');
+        if (loopModeBtn) {
+            loopModeBtn.onclick = (e) => {
+                e.stopPropagation();
+                setRepeatState(!getRepeatState(), true);
+            };
+        }
+
+        // 独立记忆开关变动
+        const memorySwitch = audioPanelEl.querySelector('#bili-setting-memory-switch');
+        if (memorySwitch) {
+            const curKey = getVideoKey();
+            const curMem = getVideoMemory(curKey);
+            memorySwitch.checked = (curMem !== undefined ? Boolean(curMem) : Boolean(getGlobalDefault()));
+            memorySwitch.onchange = (e) => {
+                setVideoMemory(curKey, e.target.checked);
+                updateMemoryStatusDisplay();
+            };
+        }
+
         // 清除本视频独立记忆
         const resetMemoryBtn = audioPanelEl.querySelector('#bili-btn-reset-memory');
         if (resetMemoryBtn) {
-            resetMemoryBtn.onclick = () => {
+            resetMemoryBtn.onclick = (e) => {
+                e.stopPropagation();
                 clearVideoMemory(getVideoKey());
                 updateMemoryStatusDisplay();
+            };
+        }
+
+        // 设置齿轮抽屉展开/收起切换
+        const settingsBtn = audioPanelEl.querySelector('#bili-btn-toggle-settings');
+        const settingsDrawer = audioPanelEl.querySelector('#bili-audio-settings-drawer');
+        if (settingsBtn && settingsDrawer) {
+            settingsBtn.onclick = (e) => {
+                e.stopPropagation();
+                settingsDrawer.classList.toggle('open');
+            };
+        }
+
+        // 点击大面板空白处自动收起悬浮抽屉与弹出菜单
+        audioPanelEl.addEventListener('click', (e) => {
+            if (settingsDrawer && !settingsDrawer.contains(e.target) && (!settingsBtn || !settingsBtn.contains(e.target))) {
+                settingsDrawer.classList.remove('open');
+            }
+            const speedContainer = audioPanelEl.querySelector('#bili-speed-container');
+            const speedMenu = audioPanelEl.querySelector('#bili-speed-popup-menu');
+            if (speedMenu && speedContainer && !speedContainer.contains(e.target)) {
+                speedMenu.classList.remove('show');
+            }
+            const qualityContainer = audioPanelEl.querySelector('#bili-quality-container');
+            const qualityMenu = audioPanelEl.querySelector('#bili-quality-popup-menu');
+            if (qualityMenu && qualityContainer && !qualityContainer.contains(e.target)) {
+                qualityMenu.classList.remove('show');
+            }
+        });
+
+        // 倍速胶囊与竖向弹出菜单事件绑定
+        const speedPillBtn = audioPanelEl.querySelector('#bili-speed-pill-btn');
+        const speedMenu = audioPanelEl.querySelector('#bili-speed-popup-menu');
+        const speedPillText = audioPanelEl.querySelector('#bili-speed-pill-text');
+        if (speedPillBtn && speedMenu) {
+            speedPillBtn.onclick = (e) => {
+                e.stopPropagation();
+                speedMenu.classList.toggle('show');
+                const qm = audioPanelEl.querySelector('#bili-quality-popup-menu');
+                if (qm) qm.classList.remove('show');
+            };
+        }
+        audioPanelEl.querySelectorAll('#bili-speed-popup-menu .bili-popup-menu-item').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const rate = parseFloat(btn.dataset.rate);
+                if (customAudioEl) customAudioEl.playbackRate = rate;
+                audioPanelEl.querySelectorAll('#bili-speed-popup-menu .bili-popup-menu-item').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                if (speedPillText) speedPillText.textContent = `${rate}x`;
+                if (speedMenu) speedMenu.classList.remove('show');
+                applyThemeToPanel();
+            };
+        });
+
+        // 音质胶囊药丸按钮点击展开/收起竖向菜单
+        const qualityPillBtn = audioPanelEl.querySelector('#bili-quality-pill-btn');
+        const qualityMenu = audioPanelEl.querySelector('#bili-quality-popup-menu');
+        if (qualityPillBtn && qualityMenu) {
+            qualityPillBtn.onclick = (e) => {
+                e.stopPropagation();
+                qualityMenu.classList.toggle('show');
+                if (speedMenu) speedMenu.classList.remove('show');
             };
         }
 
@@ -3313,17 +3760,6 @@
         if (restoreBtn) {
             restoreBtn.onclick = () => setAudioMode(false, true);
         }
-
-        // 倍速点击事件
-        audioPanelEl.querySelectorAll('.bili-rate-btn').forEach(btn => {
-            btn.onclick = () => {
-                const rate = parseFloat(btn.dataset.rate);
-                if (customAudioEl) customAudioEl.playbackRate = rate;
-                audioPanelEl.querySelectorAll('.bili-rate-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                applyThemeToPanel();
-            };
-        });
 
         // 黑胶唱盘点击事件：点击黑胶唱盘或封面即可直接切换播放/暂停
         const vinylDisc = audioPanelEl.querySelector('#bili-vinyl-disc');
