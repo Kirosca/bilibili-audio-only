@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.4.6
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；引入iOS拟态滑动开关（Toggle Switch）、倍速与音质毛玻璃向上竖向弹出菜单、右上角设置抽屉、纯正圆形主播放大按键与双向倍速自适应同步
+// @version      2.4.7
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；引入iOS拟态滑动开关、倍速与音质毛玻璃向上竖向弹出菜单、右上角设置抽屉、纯正圆形主播放大按键与双向倍速自适应同步
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -1141,8 +1141,8 @@
         if (vinylWrap) vinylWrap.style.display = isPodcast ? 'none' : 'flex';
         if (vinylInfo) vinylInfo.style.display = isPodcast ? 'none' : 'flex';
         if (vinylTitle) vinylTitle.style.display = isPodcast ? 'none' : 'block';
-        if (btnBack15) btnBack15.style.display = isPodcast ? 'inline-flex' : 'none';
-        if (btnFwd15) btnFwd15.style.display = isPodcast ? 'inline-flex' : 'none';
+        if (btnBack15) btnBack15.style.display = 'inline-flex';
+        if (btnFwd15) btnFwd15.style.display = 'inline-flex';
 
         if (badgeEl) {
             badgeEl.innerHTML = isPodcast
@@ -2562,9 +2562,9 @@
             mainPlayBtn.style.minHeight = playBtnSize;
         }
 
-        // 播客专属 ±15s 快退快进按钮尺寸
+        // ±15s 快退快进按钮尺寸适配（黑胶与播客模式通用）
         panelCard.querySelectorAll('#bili-btn-backward-15, #bili-btn-forward-15').forEach(btn => {
-            btn.style.display = isPodcast ? 'inline-flex' : 'none';
+            btn.style.display = 'inline-flex';
             const btnD = isCompactHeight ? '28px' : (isSpaciousHeight ? '34px' : '32px');
             btn.style.width = btnD;
             btn.style.height = btnD;
@@ -3230,14 +3230,7 @@
                 #bili-audio-card[data-style="podcast"] #bili-podcast-wrap {
                     display: flex !important;
                 }
-                #bili-audio-card[data-style="podcast"] #bili-btn-backward-15,
-                #bili-audio-card[data-style="podcast"] #bili-btn-forward-15 {
-                    display: inline-flex !important;
-                }
-
-                #bili-audio-card[data-style="vinyl"] #bili-podcast-wrap,
-                #bili-audio-card[data-style="vinyl"] #bili-btn-backward-15,
-                #bili-audio-card[data-style="vinyl"] #bili-btn-forward-15 {
+                #bili-audio-card[data-style="vinyl"] #bili-podcast-wrap {
                     display: none !important;
                 }
                 #bili-audio-card[data-style="vinyl"] #bili-vinyl-wrap {
@@ -3455,15 +3448,15 @@
                             </div>
                         </div>
 
-                        <!-- 中间主播放区：小宇宙±15s + 网易云纯圆大播放键 -->
+                        <!-- 中间主播放区：±15s 快退快进 + 纯圆大播放键（双模式通用） -->
                         <div style="display: flex; align-items: center; gap: 14px;">
-                            <button id="bili-btn-backward-15" class="bili-circle-btn" style="display: none;" title="快退 15 秒">
+                            <button id="bili-btn-backward-15" class="bili-circle-btn" style="display: inline-flex;" title="快退 15 秒">
                                 ${ICONS.BACKWARD_15}
                             </button>
                             <button id="bili-btn-play-pause" class="bili-main-play-btn" title="播放/暂停 (空格键)">
                                 ${ICONS.PAUSE_ROUND}
                             </button>
-                            <button id="bili-btn-forward-15" class="bili-circle-btn" style="display: none;" title="快进 15 秒">
+                            <button id="bili-btn-forward-15" class="bili-circle-btn" style="display: inline-flex;" title="快进 15 秒">
                                 ${ICONS.FORWARD_15}
                             </button>
                         </div>
