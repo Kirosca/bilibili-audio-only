@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 纯音频模式（听视频省流量）
-// @version      2.5.0
-// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；沉浸式单行轻量字幕与网易云全屏垂直平滑滚动歌词双模无缝切换；全新上线点击音量图标向上弹出垂直浮动毛玻璃音量调节面板（支持上下拖拽与滚轮微调）；全场景高倍率缩放防挤压弹性排版与边缘保护
+// @version      2.5.1
+// @description  一键切换纯音频省流模式，全新上线网易云黑胶与小宇宙播客现代沉浸式UI；黑胶与播客双模式全面配备±15s前后进度微调；沉浸式单行轻量字幕与网易云全屏垂直平滑滚动歌词双模无缝切换；全新上线点击音量图标向上弹出垂直浮动毛玻璃音量调节面板（支持上下拖拽与滚轮微调）；全场景高倍率缩放防挤压弹性排版与边缘保护；深度修复默认听视频打开场景下点击播放无响应与异步起播竞态漏洞，打通原生播放器事件与空格键全局联动
 // @author       Kirosca
 // @license      MIT
 // @icon         https://www.bilibili.com/favicon.ico
@@ -36,6 +36,7 @@
     let isSyncingToNativeVideo = false; // 音频向原视频同步标志锁（避免由脚本同步触发的 seeked 事件引起反向二次寻道震荡）
     let isAudioHandoverPending = false; // 音频初次装载/换源寻道交接屏障锁（防止 0 进度反向污染原视频与历史断点）
     let currentSwitchTransactionId = 0; // 模式切换事务令牌（严格防并发与防抖）
+    let isUserPlayRequested = false; // 用户显式起播意图守卫（彻底解决首屏/异步换源/元数据未就绪时点击播放丢失事件）
 
     // 苹果 SF Symbols 官方设计规范内联 SVG 矢量图标集（层次化质感、极致圆角、完美自适应深浅色主题）
     const ICONS = {
@@ -415,11 +416,16 @@
 
         video.addEventListener('play', () => {
             if (isAudioMode) {
+                // 原视频试图播放（可能由官方播放按钮、键盘快捷键或脚本外部触发）
                 // 若处于换视频等待新音源阶段，先静音原视频保持加载管线畅通，待新音源到达后自动接力暂停
                 if (isVideoSwitchPending && !currentAudioUrl) {
                     video.muted = true;
                 } else {
                     video.pause();
+                }
+                // 核心修复：音频模式下若自定义音频处于暂停状态，联动驱动自定义音频起播，实现原生控制栏与快捷键无缝联动
+                if (customAudioEl && customAudioEl.paused && currentAudioUrl) {
+                    toggleAudioPlayback();
                 }
             }
         });
@@ -491,7 +497,7 @@
 
         const btn = audioPanelEl.querySelector('#bili-btn-play-pause');
         if (!btn) return;
-        const isPaused = customAudioEl.paused;
+        const isPaused = isUserPlayRequested ? false : customAudioEl.paused;
         const isDark = isBiliDarkMode();
 
         btn.innerHTML = isPaused ? ICONS.PLAY_ROUND : ICONS.PAUSE_ROUND;
@@ -538,6 +544,7 @@
             if (isSeekingOperation || !customAudioEl || customAudioEl.seeking || !customAudioEl.paused) {
                 return;
             }
+            isUserPlayRequested = false;
             flushCurrentTrafficStats();
             syncAudioProgressToVideoAndStorage(true);
             updatePlayPauseBtnState();
@@ -546,6 +553,7 @@
 
     // 寻道防护：处理音频播放与发声事件
     function handleAudioPlayOrPlaying() {
+        isUserPlayRequested = false;
         if (pauseDebounceTimer) {
             clearTimeout(pauseDebounceTimer);
             pauseDebounceTimer = null;
@@ -2095,10 +2103,12 @@
         currentAudioVideoKey = targetVideoKey || getVideoKey();
         loadSubtitleForCurrentVideo();
 
-        // 若当前已在音频模式且音频直链发生变化或正在换视频挂起中，立刻换源起播
+        // 若当前已在音频模式且音频直链发生变化、正在换视频挂起中、或音频尚未装载，立刻装载换源起播
         if (isAudioMode && customAudioEl) {
-            if (isNewUrl || isVideoSwitchPending) {
+            const needLoadSrc = isNewUrl || isVideoSwitchPending || !customAudioEl.src || customAudioEl.src !== currentAudioUrl;
+            if (needLoadSrc) {
                 const origVideo = getOriginalVideo();
+                const wasVideoSwitchPending = isVideoSwitchPending;
                 isVideoSwitchPending = false;
                 isAudioHandoverPending = true;
                 let curTime = getBestStartingTime(currentAudioVideoKey);
@@ -2127,7 +2137,11 @@
                 if (customAudioEl.volume === 0 && curUserVol > 0) {
                     customAudioEl.volume = curUserVol;
                 }
-                customAudioEl.play().catch(() => {});
+                // 核心修复：如果是新视频切换、用户曾发出过播放请求、或原视频处于播放中，立刻执行音频播放
+                const shouldAutoPlay = wasVideoSwitchPending || isUserPlayRequested || (origVideo && !origVideo.paused);
+                if (shouldAutoPlay) {
+                    customAudioEl.play().catch(() => {});
+                }
                 updatePlayPauseBtnState(true);
                 updateCustomPlayerUI();
 
@@ -2415,7 +2429,12 @@
                             if (finalTarget > 0) {
                                 try { customAudioEl.currentTime = finalTarget; } catch {}
                             }
-                            customAudioEl.pause();
+                            // 核心修复：若元数据异步加载期间用户已点击起播，绝不执行 pause() 掐断音频
+                            if (isUserPlayRequested || !customAudioEl.paused) {
+                                customAudioEl.play().catch(() => {});
+                            } else {
+                                customAudioEl.pause();
+                            }
                             isAudioHandoverPending = false;
                             syncAudioProgressToVideoAndStorage(true);
                             updatePlayPauseBtnState(true);
@@ -2515,6 +2534,7 @@
                 }, 1000);
             } else {
                 // 切换回【看视频】：平滑接力回原视频画面与声音
+                isUserPlayRequested = false;
                 isAudioHandoverPending = false;
                 flushCurrentTrafficStats();
                 syncAudioProgressToVideoAndStorage(true);
@@ -4625,13 +4645,54 @@
             isSeekingOperation = false;
 
             if (customAudioEl.paused) {
-                // 时效性安全体检：若当前音频直链已失效过期，立即主动换源，避免向 CDN 提交死请求
-                if (!currentAudioUrl || isAudioUrlExpired(currentAudioUrl) || customAudioEl.error) {
-                    console.info('[BiliAudio] 点击起播检测到音源已过期或异常，启动新鲜音源续期...');
+                isUserPlayRequested = true;
+
+                // 确保存储的静音/音量记忆生效，杜绝 0 音量假死
+                customAudioEl.muted = getSavedUserMuted();
+                const curUserVol = getSavedUserVolume();
+                if (customAudioEl.volume === 0 && curUserVol > 0) {
+                    customAudioEl.volume = curUserVol;
+                }
+
+                // 错误清理防御：若存在旧媒体错误，彻底清理以允许重载
+                if (customAudioEl.error) {
+                    try {
+                        customAudioEl.removeAttribute('src');
+                        customAudioEl.load();
+                    } catch {}
+                }
+
+                // 时效性安全体检：若当前无可用音源或直链已失效过期，立即启动自愈刷新并等待装载自动起播
+                if (!currentAudioUrl || isAudioUrlExpired(currentAudioUrl)) {
+                    console.info('[BiliAudio] 点击起播检测到音源尚未就绪或已过期，发起新鲜音源获取...');
                     currentAudioUrl = null;
                     const curId = getCurrentVideoIdentity();
                     if (curId) evictAudioCache(curId);
                     requestFreshAudioSource(true);
+                    updatePlayPauseBtnState(true);
+                    return;
+                }
+
+                // 确保音频元素已正确装载当前音源
+                if (!customAudioEl.src || customAudioEl.src !== currentAudioUrl) {
+                    customAudioEl.src = currentAudioUrl;
+                    const onReadyPlay = () => {
+                        if (isUserPlayRequested) {
+                            const p = customAudioEl.play();
+                            if (p && typeof p.catch === 'function') {
+                                p.catch((err) => {
+                                    console.warn('[BiliAudio] play() 失败，启动新鲜音源重拉自愈:', err);
+                                    requestFreshAudioSource(true);
+                                });
+                            }
+                        }
+                    };
+                    if (customAudioEl.readyState >= 2) {
+                        onReadyPlay();
+                    } else {
+                        customAudioEl.addEventListener('canplay', onReadyPlay, { once: true });
+                        setTimeout(onReadyPlay, 350); // 兜底超时
+                    }
                 } else {
                     const p = customAudioEl.play();
                     if (p && typeof p.catch === 'function') {
@@ -4642,6 +4703,7 @@
                     }
                 }
             } else {
+                isUserPlayRequested = false;
                 customAudioEl.pause();
             }
             updatePlayPauseBtnState(true);
@@ -4859,6 +4921,8 @@
                 const cached = getFromAudioCache(currentId);
                 if (cached) {
                     applyAudioTracks(cached.tracks, cached.videoBandwidth, currentKey, cached.duration);
+                } else if (!currentAudioUrl) {
+                    requestFreshAudioSource(false);
                 }
             }
 
@@ -5033,6 +5097,25 @@
                 e.preventDefault();
                 e.stopPropagation();
                 setAudioMode(!isAudioMode, true);
+            }
+        }, true);
+
+        // 全局键盘空格键（Space）与纯音频模式播放/暂停联动
+        document.addEventListener('keydown', (e) => {
+            if (!isAudioMode) return;
+            if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
+                const target = e.target;
+                const tagName = target ? target.tagName.toLowerCase() : '';
+                // 排除输入框、富文本、弹幕发送框等焦点场景
+                if (tagName === 'input' || tagName === 'textarea' || (target && target.isContentEditable)) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                const playPauseBtn = audioPanelEl ? audioPanelEl.querySelector('#bili-btn-play-pause') : null;
+                if (playPauseBtn) {
+                    playPauseBtn.click();
+                }
             }
         }, true);
 
